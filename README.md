@@ -4,8 +4,8 @@ RPG voxel multiplayer em Rust, com servidor autoritativo e cliente Bevy.
 
 O mundo é dividido em chunks 16x16x16, gerados proceduralmente a partir de um
 heightmap determinístico. O cliente só envia input; quem simula o movimento e
-decide a posição dos jogadores é o servidor (20 Hz), que transmite snapshots via
-WebSocket.
+decide a posição dos jogadores e das criaturas é o servidor (20 Hz), que
+transmite snapshots via WebSocket.
 
 ## Estrutura do workspace
 
@@ -13,25 +13,31 @@ WebSocket.
 crates/
 ├── engine/            # núcleo reutilizável: sem I/O, sem rede, sem framework
 │   ├── voxel/         # Block, Chunk, ChunkMap, VoxelQuery, WorldGenerator
-│   ├── physics/       # Body + MoveIntent: gravidade, pulo, colisão AABB, voo
-│   └── meshing/       # geometria de chunk (posições, normais, cores, índices)
+│   ├── physics/       # Body + BodySpec + MoveIntent: gravidade, pulo, colisão AABB, voo
+│   ├── meshing/       # geometria de chunk (posições, normais, cores, índices)
+│   └── ai/            # Wander (parado / andando até um ponto) e Rng com seed
 ├── game/
-│   ├── sim/           # simulação autoritativa pura: comandos, tick, snapshot
+│   ├── sim/           # simulação autoritativa pura: entidades, comandos, tick, snapshot
 │   └── protocol/      # DTOs do fio, conversões DTO <-> domínio, codec JSON
 ├── server/            # adaptadores: WebSocket (axum), loop de tick (tokio), config
-└── client/            # plugins Bevy: rede, mundo, câmera, input, jogadores, HUD
+└── client/            # plugins Bevy: rede, mundo, câmera, input, jogadores, criaturas, HUD
 ```
 
 - **engine-voxel** — chunks 16³ e `ChunkMap` (a única busca de bloco por
   coordenada de mundo). `WorldGenerator` é injetado na simulação;
   `HeightmapGenerator` é o terreno atual.
 - **engine-physics** — `Body::step` recebe um `MoveIntent` (andar, `jump`,
-  `fly`, `fly_vertical`), nunca um tipo de rede.
+  `fly`, `fly_vertical`), nunca um tipo de rede. Tamanho e velocidade de cada
+  corpo vêm de um `BodySpec` (`BodySpec::PLAYER` para o jogador).
+- **engine-ai** — `Wander` decide para onde uma entidade anda (fica parada,
+  escolhe um ponto no raio da origem, anda até ele ou desiste). Determinístico:
+  a aleatoriedade sai de um `Rng` com seed recebida por parâmetro.
 - **engine-meshing** — culling de faces ocultas; o cliente só converte para
   `bevy::Mesh`.
-- **game-sim** — `Simulation::apply(Command)`, `tick()` e `snapshot()`. Não lê
-  relógio, ambiente nem rede; regras (tamanho do mundo, voo permitido) vêm de
-  `SimConfig`.
+- **game-sim** — `Simulation::apply(Command)`, `tick()` e `snapshot()`. Jogadores
+  e criaturas são entidades com o mesmo `Body`. Não lê relógio, ambiente nem
+  rede; regras (tamanho do mundo, voo permitido) e a seed vêm de `SimConfig`.
+  Conteúdo (tipos de criatura e onde nascem) fica em `content.rs`.
 - **game-protocol** — formato no fio (JSON) e a borda de validação: o input do
   cliente é sanitizado aqui e o eixo `up` vira `jump`/`fly_vertical`.
 - **server** — `config.rs` (único lugar que lê o ambiente), `tick.rs` (loop a
@@ -46,7 +52,8 @@ As dependências apontam sempre para dentro:
 ```
 client ──┐
          ├──> game-protocol ──> game-sim ──> engine-physics ──> engine-voxel
-server ──┘                                   engine-meshing ──> engine-voxel
+server ──┘                              └──> engine-ai
+                                             engine-meshing ──> engine-voxel
 ```
 
 - `engine-*` não depende de `game-*`, `server`, `client`, tokio, axum nem bevy.

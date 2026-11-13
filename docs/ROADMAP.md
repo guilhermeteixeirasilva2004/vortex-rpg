@@ -19,7 +19,7 @@ Dê git pull no main e execute a tarefa T1 do docs/ROADMAP.md seguindo o CLAUDE.
 - [x] T0 — Base: mundo voxel, movimento autoritativo, arquitetura modular
 - [ ] T1 — Ajustes de movimento
 - [ ] T2 — Mira: raycast e bloco em destaque
-- [ ] T3 — Entidades e uma criatura que anda
+- [x] T3 — Entidades e uma criatura que anda
 - [ ] T4 — Atributos, vida e morte
 - [ ] T5 — Alvo e combate corpo a corpo
 - [ ] T6 — Inimigo que persegue e ataca
@@ -249,3 +249,9 @@ Problemas encontrados fora do escopo de uma tarefa entram aqui, com uma linha
 cada, até virarem tarefa.
 
 - O cliente depende de `game-sim` indiretamente, via `game-protocol`.
+- Criaturas e jogadores remotos pulam de posição a cada snapshot (20 Hz),
+  sem interpolação no cliente; com criaturas andando isso fica visível.
+- A cor de cada tipo de criatura está numa tabela do cliente indexada pelo
+  nome que vem de `game-sim/content.rs`: tipo novo sem cor aparece magenta.
+- O `Rng` mora em `engine-ai`; quando T8 (loot) precisar sortear, extrair
+  para um crate próprio em vez de fazer o inventário depender da IA.
