@@ -1,37 +1,46 @@
 # Roadmap
 
-Plano guia das mecânicas básicas. Cada tarefa é uma fatia vertical pequena:
-termina com algo que dá para abrir o jogo e testar. Faça uma por vez, na
-ordem; as regras de engenharia estão em `CLAUDE.md`.
+Plano guia das mecânicas básicas de RPG. O mundo é feito de blocos, mas o
+jogo não é de construção: o foco é personagem, combate, progressão, itens e
+missões. O terreno é cenário fixo.
+
+Cada tarefa é uma fatia vertical pequena: termina com algo que dá para abrir
+o jogo e testar. Faça uma por vez, na ordem; as regras de engenharia estão em
+`CLAUDE.md`.
 
 Para pedir uma tarefa ao Claude Code:
 
 ```text
-Execute a tarefa T1 do docs/ROADMAP.md seguindo o CLAUDE.md.
+Dê git pull no main e execute a tarefa T1 do docs/ROADMAP.md seguindo o CLAUDE.md.
 ```
 
 ## Estado
 
 - [x] T0 — Base: mundo voxel, movimento autoritativo, arquitetura modular
 - [ ] T1 — Ajustes de movimento
-- [ ] T2 — Mira: raycast e bloco em destaque
-- [ ] T3 — Quebrar e colocar blocos
-- [ ] T4 — Inventário e hotbar
-- [ ] T5 — Vida, dano de queda e morte
-- [ ] T6 — Entidades e um NPC que anda
-- [ ] T7 — Combate corpo a corpo
-- [ ] T8 — Salvar o mundo em disco
-- [ ] T9 — Predição de movimento no cliente
-- [ ] T10 — Ciclo de dia e noite
+- [ ] T2 — Entidades e uma criatura que anda
+- [ ] T3 — Atributos, vida e morte
+- [ ] T4 — Alvo e combate corpo a corpo
+- [ ] T5 — Inimigo que persegue e ataca
+- [ ] T6 — Experiência e níveis
+- [ ] T7 — Inventário e loot
+- [ ] T8 — Equipamento
+- [ ] T9 — Habilidades, mana e recarga
+- [ ] T10 — NPCs e diálogo
+- [ ] T11 — Missões
+- [ ] T12 — Salvar personagem e progresso
+- [ ] T13 — Predição de movimento no cliente
 
-Ideias para depois, sem ordem: crafting, chat, experiência e níveis, ruído de
-verdade no terreno, carregamento de chunks por distância, protocolo binário.
+Ideias para depois, sem ordem: classes, efeitos de status (veneno, lentidão),
+ouro e lojas, grupo de jogadores, chat, zonas e masmorras, tipos variados de
+inimigo e chefes, ciclo de dia e noite, ruído de verdade no terreno, protocolo
+binário.
 
 ## Tarefas
 
 ### T1 — Ajustes de movimento
 
-Corrige as três pendências conhecidas do movimento.
+Corrige as pendências conhecidas do movimento.
 
 - Toque curto no Espaço (menos de um tick) não pode se perder: o cliente
   guarda o toque até o próximo input enviado.
@@ -47,120 +56,177 @@ Muda o movimento de propósito: regere os goldens de simulação.
 degrau de 1 bloco com folga e não de 2; F3, descer até atravessar o mundo,
 F3 de novo e o jogador reaparece em cima do terreno.
 
-### T2 — Mira: raycast e bloco em destaque
+### T2 — Entidades e uma criatura que anda
 
-- `engine-voxel`: raycast em voxels (DDA) que devolve o primeiro bloco sólido
-  no caminho, a face atingida e a distância. Testes com mundo sintético.
-- `client`: plugin que lança o raio da câmera a cada frame e desenha um
-  contorno no bloco mirado, até um alcance máximo (constante compartilhada no
-  núcleo, porque o servidor vai usar a mesma em T3). Mira no centro da tela.
+- `game-sim`: generalize "jogador" para "entidade" (id, tipo, corpo físico),
+  mantendo o jogador como um tipo. Criaturas usam o mesmo `Body` da física.
+- Novo `engine-ai`: máquina de estados mínima (parado, andando até um ponto),
+  determinística, com seed recebida por parâmetro.
+- Algumas criaturas nascem em pontos fixos perto do spawn e perambulam em
+  volta do ponto de origem; pulam degraus de 1 bloco.
+- Tipos de criatura são conteúdo: tabela em `game-sim` (nome, tamanho,
+  velocidade), não código na engine.
+- `game-protocol`/`client`: entidades no snapshot, desenhadas com cor e
+  tamanho próprios, diferentes dos jogadores.
 
-Só visual: nada muda no servidor nem no protocolo.
+**Testar jogando:** ver as criaturas andando pelo terreno sem atravessar
+blocos e sem se afastar demais da origem; com dois clientes, os dois veem as
+criaturas nos mesmos lugares.
 
-**Testar jogando:** o contorno segue o bloco para onde você olha, some ao
-olhar para o céu ou para longe demais, e marca o bloco certo em quinas.
+### T3 — Atributos, vida e morte
 
-### T3 — Quebrar e colocar blocos
+- Novo `engine-stats`: atributos base (ex.: força, agilidade, vitalidade,
+  inteligência), valores derivados calculados a partir deles (vida máxima,
+  dano, etc.) e recurso com atual/máximo (vida), com dano, cura e morte. A
+  engine dá o mecanismo; as fórmulas e os valores iniciais são conteúdo do
+  jogo.
+- `game-sim`: toda entidade tem atributos e vida. Dano de queda acima de uma
+  velocidade de impacto; cair no vazio mata. Ao morrer o jogador renasce no
+  spawn com vida cheia. Voo debug não toma dano.
+- `game-protocol`: vida de cada entidade no snapshot; evento de morte.
+- `client`: barra de vida do jogador no HUD e aviso rápido ao morrer.
 
-- `game-sim`: comandos "quebrar o bloco mirado" e "colocar bloco na face
-  mirada". O servidor refaz o raycast a partir do olho e do yaw/pitch do
-  jogador e valida o alcance; não confia em coordenada vinda do cliente sem
-  conferir. Não deixa colocar bloco dentro de um jogador.
-- O mundo passa a ser mutável. Hoje os chunks são um `Arc<ChunkMap>` imutável
-  compartilhado com o handshake da rede; resolva isso com uma única fonte de
-  verdade na simulação.
-- `game-protocol`: mensagens do cliente para as duas ações e mensagem do
-  servidor com a mudança de bloco. Quem entra depois recebe o mundo já
-  modificado.
-- `client`: clique esquerdo quebra, clique direito coloca; o chunk (e o
-  vizinho, na borda) é remalhado.
+**Testar jogando:** pular de 3 blocos não machuca; cair de bem alto tira
+vida; de mais alto ainda mata e renasce no spawn; F3 não toma dano.
 
-**Testar jogando:** quebrar e colocar blocos; cavar um buraco e cair nele;
-não conseguir agir além do alcance; com dois clientes, um vê as mudanças do
-outro; um cliente que entra depois vê tudo como ficou.
+### T4 — Alvo e combate corpo a corpo
 
-### T4 — Inventário e hotbar
+- `engine-physics`: raio contra AABB de entidade; `engine-voxel`: raycast em
+  voxels (DDA), para o terreno bloquear a linha de visão.
+- `game-sim`: comando de ataque. O servidor refaz o raio a partir do olho e do
+  yaw/pitch do jogador, valida alcance, linha de visão e recarga, e calcula o
+  dano a partir dos atributos (T3). Empurrão no alvo. Criatura morta some e
+  renasce na origem depois de um tempo.
+- `game-protocol`: ataque do cliente; evento de dano com valor.
+- `client`: mira no centro da tela; a entidade mirada fica destacada e mostra
+  nome e barra de vida; clique esquerdo ataca; número de dano flutuando.
+
+**Testar jogando:** mirar numa criatura e ver nome e vida; bater até morrer e
+ver renascer; clicar rápido não bate mais rápido que a recarga; não acertar
+de longe nem através de um morro; dois jogadores batendo na mesma criatura.
+
+### T5 — Inimigo que persegue e ataca
+
+- `engine-ai`: estados de perseguir, atacar e voltar para a origem, com raio
+  de percepção e raio de desistência.
+- `game-sim`: tipo de criatura hostil na tabela de conteúdo (dano, alcance,
+  recarga, percepção). Ela persegue o jogador mais próximo, ataca com as
+  mesmas regras de dano de T4 e volta para casa recuperando vida ao desistir.
+  Criaturas pacíficas de T2 continuam existindo.
+
+**Testar jogando:** chegar perto de um inimigo e ele vir atrás; tomar dano e
+morrer se ficar parado; fugir e ver ele desistir e voltar; com dois
+jogadores, ele escolhe o mais próximo.
+
+### T6 — Experiência e níveis
+
+- Novo `engine-progression`: experiência, curva de nível e pontos de atributo
+  ganhos por nível. Curva e recompensas são conteúdo.
+- `game-sim`: matar criatura dá experiência a quem causou dano; subir de nível
+  dá pontos; comando para gastar ponto em um atributo, validado no servidor.
+  Os valores derivados (vida máxima, dano) são recalculados.
+- `game-protocol`: nível, experiência e pontos do próprio jogador.
+- `client`: barra de experiência e nível no HUD; tela de personagem (tecla
+  `C`) com atributos e botão para gastar pontos; aviso ao subir de nível.
+
+**Testar jogando:** matar inimigos e ver a barra encher; subir de nível;
+gastar um ponto em força e bater mais forte; gastar em vitalidade e ver a
+vida máxima subir.
+
+### T7 — Inventário e loot
 
 - Novo `engine-inventory`: item, pilha com limite, inventário de slots
   (adicionar, remover, mover, empilhar). Puro e testado.
-- `game-sim`: bloco quebrado entra no inventário do jogador; colocar bloco
-  consome do slot selecionado e falha se estiver vazio.
-- `game-protocol`: estado do inventário do próprio jogador e seleção de slot.
-- `client`: hotbar no HUD com contagem; teclas `1`–`9` e roda do mouse
-  selecionam.
+- `game-sim`: tabela de itens e tabela de loot por tipo de criatura, sorteada
+  com seed determinística. Criatura morta deixa o loot no chão como entidade;
+  o jogador pega chegando perto e apertando `E`. Um consumível (poção) cura
+  ao ser usado.
+- `game-protocol`: inventário do próprio jogador; comandos de pegar, usar e
+  mover item.
+- `client`: itens no chão visíveis; tela de inventário (tecla `I`); usar item
+  com clique.
 
-**Testar jogando:** começar sem blocos e não conseguir colocar; quebrar grama
-e ver a contagem subir; colocar e ver descer; trocar de slot muda o bloco
-colocado.
+**Testar jogando:** matar um inimigo, ver o item cair, pegar com `E`, abrir o
+inventário e ver a pilha; usar uma poção e a vida subir; inventário cheio
+recusa o item, que continua no chão; com dois jogadores, só um pega.
 
-### T5 — Vida, dano de queda e morte
+### T8 — Equipamento
 
-- Novo `engine-vitals`: vida com máximo, dano, cura, morte. Puro e testado.
-- `game-sim`: dano de queda proporcional à velocidade de impacto acima de um
-  limite; cair no vazio mata; ao morrer o jogador renasce no spawn com vida
-  cheia. Voo debug não toma dano.
-- `game-protocol`: vida do próprio jogador no snapshot; evento de morte.
-- `client`: barra de vida no HUD e um aviso rápido ao morrer.
+- `engine-inventory` ou crate próprio: slots de equipamento (arma, armadura)
+  com regra de qual item entra em qual slot.
+- `engine-stats`: modificadores de atributo vindos de fora (equipamento
+  agora, efeitos depois), somados aos valores base.
+- `game-sim`: equipar e desequipar validados no servidor; arma muda dano,
+  alcance e recarga do ataque; armadura reduz dano recebido.
+- `client`: slots de equipamento na tela de inventário; valores atualizados
+  na tela de personagem.
 
-**Testar jogando:** pular de 3 blocos não machuca; cair de bem alto tira
-vida; cair de mais alto ainda mata e renasce no spawn; F3 não toma dano.
+**Testar jogando:** equipar uma espada caída de um inimigo e matar mais
+rápido; equipar armadura e tomar menos dano; desequipar volta ao normal.
 
-### T6 — Entidades e um NPC que anda
+### T9 — Habilidades, mana e recarga
 
-- `game-sim`: generalize "jogador" para "entidade" (id, tipo, corpo físico),
-  mantendo o jogador como um tipo. NPCs usam o mesmo `Body` da física.
-- Novo `engine-ai`: máquina de estados mínima (parado, andando até um ponto),
-  determinística com seed recebida por parâmetro.
-- Um NPC nasce perto do spawn e perambula; pula degraus de 1 bloco.
-- `game-protocol`/`client`: entidades no snapshot, desenhadas com cor
-  diferente dos jogadores.
+- Novo `engine-abilities`: habilidade com custo, recarga, alcance e lista de
+  efeitos (dano, cura, empurrão); controle de recarga por entidade. As
+  habilidades em si são conteúdo.
+- `engine-stats`: segundo recurso (mana) com regeneração por tick.
+- `game-sim`: duas ou três habilidades na tabela de conteúdo (ex.: golpe
+  forte, cura, projétil à distância); comando de usar habilidade validado no
+  servidor (custo, recarga, alcance, alvo).
+- `client`: barra de mana; barra de habilidades com teclas `1`–`4`, mostrando
+  a recarga; efeito visual simples ao usar.
 
-**Testar jogando:** ver o NPC andando pelo terreno, subindo degraus e sem
-atravessar blocos; cavar um buraco (T3) e ver ele cair dentro.
+**Testar jogando:** usar cada habilidade e ver o efeito; ficar sem mana e não
+conseguir usar; ver a recarga contando; a mana voltar com o tempo.
 
-### T7 — Combate corpo a corpo
+### T10 — NPCs e diálogo
 
-- `engine-physics`: raio contra AABB de entidade.
-- `game-sim`: comando de ataque com alcance e tempo de recarga validados no
-  servidor; dano (T5), empurrão e morte do NPC, que deixa um item no
-  inventário de quem matou (T4) e renasce depois de um tempo.
-- `client`: clique esquerdo ataca quando a mira está numa entidade (senão,
-  quebra bloco); feedback visual do acerto.
+- Novo `engine-dialogue`: árvore de diálogo (falas, opções, saltos), pura e
+  definida por dados.
+- `game-sim`: tipo de entidade NPC amigável, que não pode ser atacado; comando
+  de interagir (`E`) validado por distância; estado da conversa por jogador.
+- `client`: indicação ao mirar num NPC; caixa de diálogo com opções
+  escolhidas pelo teclado.
 
-**Testar jogando:** bater no NPC até morrer, ver o empurrão, receber o item,
-ver ele renascer; clicar rápido não bate mais rápido que a recarga; dois
-jogadores conseguem se atacar (ou não: registre a decisão).
+**Testar jogando:** falar com um NPC perto do spawn, navegar pelas opções e
+encerrar; não conseguir falar de longe; não conseguir atacá-lo; dois
+jogadores conversam com o mesmo NPC sem interferir um no outro.
 
-### T8 — Salvar o mundo em disco
+### T11 — Missões
 
-- `game-sim`: trait de armazenamento do mundo (porta) com uma implementação
-  em memória para testes.
-- `server`: adaptador que grava em disco só os chunks modificados, ao sair e
-  a cada intervalo; carrega ao iniciar. Pasta configurável por variável de
-  ambiente, lida em `config.rs`.
+- Novo `engine-quests`: missão com objetivos (matar N de um tipo, coletar N de
+  um item, falar com alguém), progresso e estados (disponível, ativa,
+  concluída, entregue). Reage a eventos, não conhece o jogo.
+- `game-sim`: missões na tabela de conteúdo, oferecidas e entregues por NPC
+  via diálogo (T10); os eventos da simulação (morte, coleta, conversa)
+  alimentam o progresso; recompensa em experiência e itens.
+- `client`: lista de missões ativas no HUD com progresso; aviso ao concluir.
 
-**Testar jogando:** construir algo, fechar o servidor, abrir de novo e
-encontrar tudo no lugar; apagar a pasta de save volta ao mundo gerado.
+**Testar jogando:** aceitar "mate 3 inimigos" com o NPC, ver o contador
+subir, voltar, entregar e receber experiência e item; não dá para entregar
+duas vezes.
 
-### T9 — Predição de movimento no cliente
+### T12 — Salvar personagem e progresso
+
+- `game-sim`: trait de armazenamento de personagem (porta), com implementação
+  em memória para testes. Salva nível, experiência, atributos, inventário,
+  equipamento e missões.
+- `game-protocol`: o cliente informa um nome de personagem ao entrar.
+- `server`: adaptador que grava em disco ao sair e a cada intervalo e carrega
+  ao entrar. Pasta configurável por variável de ambiente, lida em `config.rs`.
+
+**Testar jogando:** evoluir o personagem, fechar cliente e servidor, abrir de
+novo com o mesmo nome e encontrar tudo; outro nome começa do zero.
+
+### T13 — Predição de movimento no cliente
 
 - `client`: roda o mesmo `engine-physics` localmente para o próprio jogador e
   reconcilia com o servidor usando `last_input_seq`, reaplicando os inputs
   ainda não confirmados. O servidor continua sendo a autoridade.
 
-**Testar jogando:** o movimento responde na hora, sem o atraso de hoje; com
-atraso de rede artificial o jogador não "volta" visivelmente ao andar; bater
-numa parede não treme.
-
-### T10 — Ciclo de dia e noite
-
-- Novo `engine-time`: relógio de mundo avançado por tick, com duração do dia
-  configurável. Puro e testado.
-- `game-sim`/`game-protocol`: hora do mundo no snapshot.
-- `client`: direção e intensidade do sol e cor do céu seguem a hora.
-
-**Testar jogando:** o céu escurece e clareia num ciclo curto de teste; dois
-clientes veem a mesma hora.
+**Testar jogando:** o movimento responde na hora, sem o atraso de hoje; bater
+numa parede não treme; tomar um empurrão de inimigo não causa "teleporte"
+estranho.
 
 ## Pendências
 
