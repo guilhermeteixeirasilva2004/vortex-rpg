@@ -5,16 +5,18 @@ use bevy::prelude::*;
 use crossbeam_channel::{Receiver, Sender};
 use engine_voxel::Chunk;
 use futures_util::{SinkExt, StreamExt};
-use shared::protocol::{self, ClientMessage, PlayerId, PlayerState, ServerMessage};
+use game_protocol::{ClientMessage, PlayerId, PlayerState, ServerMessage};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
+
+/// Servidor padrão (sobrescrito com `VORTEX_SERVER`).
+const DEFAULT_SERVER_URL: &str = "ws://127.0.0.1:3000/ws";
 
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        let url =
-            std::env::var("VORTEX_SERVER").unwrap_or_else(|_| shared::DEFAULT_SERVER_URL.into());
+        let url = std::env::var("VORTEX_SERVER").unwrap_or_else(|_| DEFAULT_SERVER_URL.into());
         app.insert_resource(spawn_network_thread(url))
             .init_resource::<LocalPlayer>()
             .init_resource::<IncomingChunks>()
@@ -118,7 +120,7 @@ async fn run_connection(
         tokio::select! {
             msg = read.next() => match msg {
                 Some(Ok(Message::Text(text))) => {
-                    match protocol::decode::<ServerMessage>(text.as_str()) {
+                    match game_protocol::decode::<ServerMessage>(text.as_str()) {
                         Ok(m) => if incoming.send(m).is_err() { break },
                         Err(e) => warn!("mensagem inválida do servidor: {e}"),
                     }
@@ -128,7 +130,7 @@ async fn run_connection(
                 Some(Err(e)) => return Err(e.into()),
             },
             out = outgoing.recv() => match out {
-                Some(m) => write.send(Message::text(protocol::encode(&m)?)).await?,
+                Some(m) => write.send(Message::text(game_protocol::encode(&m)?)).await?,
                 None => break,
             },
         }

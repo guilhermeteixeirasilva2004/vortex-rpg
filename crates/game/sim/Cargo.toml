@@ -1,0 +1,10 @@
+[package]
+name = "game-sim"
+description = "Núcleo do jogo: jogadores, comandos, tick e snapshot. Puro, sem I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-voxel.workspace = true
+engine-physics.workspace = true

@@ -5,9 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-shared.workspace = true
 engine-voxel.workspace = true
-engine-physics.workspace = true
+game-sim.workspace = true
+game-protocol.workspace = true
 axum.workspace = true
 tokio.workspace = true
 futures-util.workspace = true

@@ -3,7 +3,8 @@ resolver = "2"
 members = [
     "crates/engine/voxel",
     "crates/engine/physics",
-    "crates/shared",
+    "crates/game/sim",
+    "crates/game/protocol",
     "crates/client",
     "crates/server",
 ]
@@ -14,9 +15,10 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-shared = { path = "crates/shared" }
 engine-voxel = { path = "crates/engine/voxel" }
 engine-physics = { path = "crates/engine/physics" }
+game-sim = { path = "crates/game/sim" }
+game-protocol = { path = "crates/game/protocol" }
 
 thiserror = "2"
 

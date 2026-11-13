@@ -7,11 +7,18 @@ mod net;
 use std::sync::Arc;
 
 use engine_voxel::HeightmapGenerator;
+use game_sim::{SimConfig, Simulation};
 use tokio::sync::{broadcast, mpsc};
 use tracing_subscriber::EnvFilter;
 
-use crate::game::GameWorld;
 use crate::net::AppState;
+
+/// Endereço padrão de escuta.
+const DEFAULT_BIND_ADDR: &str = "0.0.0.0:3000";
+
+/// Mundo inicial: 8x2x8 chunks ao redor da origem.
+const WORLD_RADIUS_CHUNKS: i32 = 4;
+const WORLD_HEIGHT_CHUNKS: i32 = 2;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,21 +38,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok("0" | "false") => false,
         _ => cfg!(debug_assertions),
     };
+    let config = SimConfig {
+        world_radius_chunks: WORLD_RADIUS_CHUNKS,
+        world_height_chunks: WORLD_HEIGHT_CHUNKS,
+        allow_fly,
+    };
+    let sim = Simulation::new(&HeightmapGenerator, config);
+    tracing::info!("mundo gerado: {} chunks não vazios", sim.chunks().len());
     tracing::info!(
         "modo voo (debug): {}",
         if allow_fly { "permitido" } else { "bloqueado" }
     );
-    let world = GameWorld::new(&HeightmapGenerator, allow_fly);
     let state = AppState::new(
         event_tx,
         snapshot_tx.clone(),
-        Arc::clone(world.chunks()),
-        world.spawn(),
+        Arc::clone(sim.chunks()),
+        sim.spawn(),
     );
 
-    tokio::spawn(game::run(world, event_rx, snapshot_tx));
+    tokio::spawn(game::run(sim, event_rx, snapshot_tx));
 
-    let addr = std::env::var("VORTEX_BIND").unwrap_or_else(|_| shared::DEFAULT_BIND_ADDR.into());
+    let addr = std::env::var("VORTEX_BIND").unwrap_or_else(|_| DEFAULT_BIND_ADDR.into());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("escutando em ws://{addr}/ws");
     axum::serve(listener, net::router(state)).await?;

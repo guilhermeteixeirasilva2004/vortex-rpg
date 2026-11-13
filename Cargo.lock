@@ -1453,7 +1453,7 @@ dependencies = [
  "crossbeam-channel",
  "engine-voxel",
  "futures-util",
- "shared",
+ "game-protocol",
  "tokio",
  "tokio-tungstenite 0.26.2",
 ]
@@ -2032,6 +2032,26 @@ dependencies = [
  "futures-task",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "game-protocol"
+version = "0.1.0"
+dependencies = [
+ "engine-physics",
+ "engine-voxel",
+ "game-sim",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "game-sim"
+version = "0.1.0"
+dependencies = [
+ "engine-physics",
+ "engine-voxel",
 ]
 
 [[package]]
@@ -3706,10 +3726,10 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "axum",
- "engine-physics",
  "engine-voxel",
  "futures-util",
- "shared",
+ "game-protocol",
+ "game-sim",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3733,16 +3753,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shared"
-version = "0.1.0"
-dependencies = [
- "engine-physics",
- "engine-voxel",
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
-use shared::protocol::{ClientMessage, PlayerId, PlayerInput};
+use game_protocol::{ClientMessage, PlayerId, PlayerInput};
 
 use crate::network::{LatestSnapshot, LocalPlayer, NetClient};
 
@@ -19,7 +19,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Time::<Fixed>::from_hz(f64::from(shared::SERVER_TICK_RATE)))
+        app.insert_resource(Time::<Fixed>::from_hz(f64::from(game_protocol::TICK_RATE)))
             .init_resource::<InputSeq>()
             .init_resource::<FlyRequest>()
             .init_resource::<RemotePlayers>()

@@ -8,14 +8,13 @@ use axum::routing::get;
 use axum::Router;
 use engine_voxel::ChunkMap;
 use futures_util::{SinkExt, StreamExt};
-use shared::protocol::{self, ChunkDto, ClientMessage, ServerMessage};
+use game_protocol::{ChunkDto, ClientMessage, ServerMessage};
+use game_sim::Command;
 use tokio::sync::{broadcast, mpsc};
-
-use crate::game::GameEvent;
 
 #[derive(Clone)]
 pub struct AppState {
-    events: mpsc::UnboundedSender<GameEvent>,
+    events: mpsc::UnboundedSender<Command>,
     snapshots: broadcast::Sender<Utf8Bytes>,
     chunks: Arc<ChunkMap>,
     spawn: [f32; 3],
@@ -24,7 +23,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        events: mpsc::UnboundedSender<GameEvent>,
+        events: mpsc::UnboundedSender<Command>,
         snapshots: broadcast::Sender<Utf8Bytes>,
         chunks: Arc<ChunkMap>,
         spawn: [f32; 3],
@@ -51,7 +50,7 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
 }
 
 async fn send(socket: &mut WebSocket, msg: &ServerMessage) -> bool {
-    match protocol::encode(msg) {
+    match game_protocol::encode(msg) {
         Ok(json) => socket.send(Message::Text(json.into())).await.is_ok(),
         Err(e) => {
             tracing::error!("falha ao serializar: {e}");
@@ -87,7 +86,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     }
 
     let mut snapshots = state.snapshots.subscribe();
-    if state.events.send(GameEvent::Join { id }).is_err() {
+    if state.events.send(Command::Join { id }).is_err() {
         return;
     }
 
@@ -112,14 +111,22 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = rx.next().await {
             match msg {
-                Message::Text(text) => match protocol::decode::<ClientMessage>(text.as_str()) {
-                    Ok(ClientMessage::Input(input)) => {
-                        if events.send(GameEvent::Input { id, input }).is_err() {
-                            break;
+                Message::Text(text) => {
+                    match game_protocol::decode::<ClientMessage>(text.as_str()) {
+                        Ok(ClientMessage::Input(input)) => {
+                            if events
+                                .send(Command::Input {
+                                    id,
+                                    input: input.into(),
+                                })
+                                .is_err()
+                            {
+                                break;
+                            }
                         }
+                        Err(e) => tracing::warn!("jogador {id}: mensagem inválida: {e}"),
                     }
-                    Err(e) => tracing::warn!("jogador {id}: mensagem inválida: {e}"),
-                },
+                }
                 Message::Close(_) => break,
                 _ => {}
             }
@@ -131,5 +138,5 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         _ = &mut recv_task => send_task.abort(),
     }
 
-    let _ = state.events.send(GameEvent::Leave { id });
+    let _ = state.events.send(Command::Leave { id });
 }
