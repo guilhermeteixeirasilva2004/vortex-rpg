@@ -256,7 +256,10 @@ mod tests {
         run(&mut b, PlayerInput::default(), 2);
         assert!(b.on_ground);
 
-        let jump = PlayerInput { up: 1.0, ..Default::default() };
+        let jump = PlayerInput {
+            up: 1.0,
+            ..Default::default()
+        };
         let mut peak = 0.0_f32;
         for _ in 0..20 {
             b.step(&jump, &Flat, TICK_DT, true);
@@ -265,7 +268,11 @@ mod tests {
                 break;
             }
         }
-        assert!(peak > 11.0 && peak < 11.6, "altura do pulo: {}", peak - 10.0);
+        assert!(
+            peak > 11.0 && peak < 11.6,
+            "altura do pulo: {}",
+            peak - 10.0
+        );
     }
 
     #[test]
@@ -278,7 +285,11 @@ mod tests {
             ..Default::default()
         };
         run(&mut b, walk, 40);
-        assert!(b.position[0] + PLAYER_WIDTH / 2.0 <= 5.0, "x = {}", b.position[0]);
+        assert!(
+            b.position[0] + PLAYER_WIDTH / 2.0 <= 5.0,
+            "x = {}",
+            b.position[0]
+        );
         assert!(b.position[0] > 4.5);
         assert!(b.on_ground);
     }
@@ -286,7 +297,10 @@ mod tests {
     #[test]
     fn fly_ignores_gravity_and_collision() {
         let mut b = Body::at([0.5, 5.0, 0.5]); // dentro do chão
-        let fly = PlayerInput { fly: true, ..Default::default() };
+        let fly = PlayerInput {
+            fly: true,
+            ..Default::default()
+        };
         run(&mut b, fly, 20);
         assert_eq!(b.position, [0.5, 5.0, 0.5]);
         assert!(b.flying);
@@ -295,7 +309,10 @@ mod tests {
     #[test]
     fn fly_requires_server_permission() {
         let mut b = Body::at([0.5, 30.0, 0.5]);
-        let fly = PlayerInput { fly: true, ..Default::default() };
+        let fly = PlayerInput {
+            fly: true,
+            ..Default::default()
+        };
         b.step(&fly, &Flat, TICK_DT, false);
         assert!(!b.flying);
         assert!(b.position[1] < 30.0);

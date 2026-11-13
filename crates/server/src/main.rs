@@ -48,9 +48,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok("0" | "false") => false,
         _ => cfg!(debug_assertions),
     };
-    tracing::info!("modo voo (debug): {}", if allow_fly { "permitido" } else { "bloqueado" });
+    tracing::info!(
+        "modo voo (debug): {}",
+        if allow_fly { "permitido" } else { "bloqueado" }
+    );
     let world = GameWorld::new(chunks, allow_fly);
-    let state = AppState::new(event_tx, snapshot_tx.clone(), Arc::new(world.chunks().to_vec()));
+    let state = AppState::new(
+        event_tx,
+        snapshot_tx.clone(),
+        Arc::new(world.chunks().to_vec()),
+    );
 
     tokio::spawn(game::run(world, event_rx, snapshot_tx));
 

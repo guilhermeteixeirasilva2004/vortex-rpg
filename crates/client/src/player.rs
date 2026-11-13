@@ -26,7 +26,14 @@ impl Plugin for PlayerPlugin {
             .add_systems(Startup, spawn_camera)
             .add_systems(
                 Update,
-                (cursor_grab, toggle_fly, mouse_look, apply_snapshot, smooth_follow).chain(),
+                (
+                    cursor_grab,
+                    toggle_fly,
+                    mouse_look,
+                    apply_snapshot,
+                    smooth_follow,
+                )
+                    .chain(),
             )
             .add_systems(FixedUpdate, send_input);
     }
@@ -143,6 +150,8 @@ fn send_input(
     }));
 }
 
+// Temporário: some quando o player.rs for dividido em plugins (fase 6).
+#[allow(clippy::too_many_arguments)]
 fn apply_snapshot(
     mut commands: Commands,
     mut snapshot: ResMut<LatestSnapshot>,

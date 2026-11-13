@@ -18,12 +18,72 @@ struct Face {
 }
 
 const FACES: [Face; 6] = [
-    Face { normal: [1.0, 0.0, 0.0], dir: [1, 0, 0], corners: [[1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [1.0, 1.0, 1.0], [1.0, 0.0, 1.0]], shade: 0.8 },
-    Face { normal: [-1.0, 0.0, 0.0], dir: [-1, 0, 0], corners: [[0.0, 0.0, 1.0], [0.0, 1.0, 1.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]], shade: 0.8 },
-    Face { normal: [0.0, 1.0, 0.0], dir: [0, 1, 0], corners: [[0.0, 1.0, 0.0], [0.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 0.0]], shade: 1.0 },
-    Face { normal: [0.0, -1.0, 0.0], dir: [0, -1, 0], corners: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]], shade: 0.5 },
-    Face { normal: [0.0, 0.0, 1.0], dir: [0, 0, 1], corners: [[0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 1.0], [0.0, 1.0, 1.0]], shade: 0.7 },
-    Face { normal: [0.0, 0.0, -1.0], dir: [0, 0, -1], corners: [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]], shade: 0.7 },
+    Face {
+        normal: [1.0, 0.0, 0.0],
+        dir: [1, 0, 0],
+        corners: [
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ],
+        shade: 0.8,
+    },
+    Face {
+        normal: [-1.0, 0.0, 0.0],
+        dir: [-1, 0, 0],
+        corners: [
+            [0.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ],
+        shade: 0.8,
+    },
+    Face {
+        normal: [0.0, 1.0, 0.0],
+        dir: [0, 1, 0],
+        corners: [
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 0.0],
+        ],
+        shade: 1.0,
+    },
+    Face {
+        normal: [0.0, -1.0, 0.0],
+        dir: [0, -1, 0],
+        corners: [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ],
+        shade: 0.5,
+    },
+    Face {
+        normal: [0.0, 0.0, 1.0],
+        dir: [0, 0, 1],
+        corners: [
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 1.0, 1.0],
+        ],
+        shade: 0.7,
+    },
+    Face {
+        normal: [0.0, 0.0, -1.0],
+        dir: [0, 0, -1],
+        corners: [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ],
+        shade: 0.7,
+    },
 ];
 
 fn block_color(block: Block) -> [f32; 3] {
@@ -45,7 +105,10 @@ pub fn build_chunk_mesh(chunk: &Chunk, neighbor: impl Fn(i32, i32, i32) -> Block
     let mut indices: Vec<u32> = Vec::new();
 
     let solid_at = |x: i32, y: i32, z: i32| -> bool {
-        chunk.get(x, y, z).unwrap_or_else(|| neighbor(x, y, z)).is_solid()
+        chunk
+            .get(x, y, z)
+            .unwrap_or_else(|| neighbor(x, y, z))
+            .is_solid()
     };
 
     for y in 0..CHUNK_SIZE_I32 {
@@ -61,13 +124,25 @@ pub fn build_chunk_mesh(chunk: &Chunk, neighbor: impl Fn(i32, i32, i32) -> Block
                         continue;
                     }
                     let start = positions.len() as u32;
-                    let color = [base[0] * face.shade, base[1] * face.shade, base[2] * face.shade, 1.0];
+                    let color = [
+                        base[0] * face.shade,
+                        base[1] * face.shade,
+                        base[2] * face.shade,
+                        1.0,
+                    ];
                     for c in face.corners {
                         positions.push([x as f32 + c[0], y as f32 + c[1], z as f32 + c[2]]);
                         normals.push(face.normal);
                         colors.push(color);
                     }
-                    indices.extend_from_slice(&[start, start + 1, start + 2, start, start + 2, start + 3]);
+                    indices.extend_from_slice(&[
+                        start,
+                        start + 1,
+                        start + 2,
+                        start,
+                        start + 2,
+                        start + 3,
+                    ]);
                 }
             }
         }
@@ -78,7 +153,10 @@ pub fn build_chunk_mesh(chunk: &Chunk, neighbor: impl Fn(i32, i32, i32) -> Block
     }
 
     // RENDER_WORLD: a cópia na CPU é descartada após o upload (economiza RAM).
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);

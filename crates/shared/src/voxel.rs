@@ -125,10 +125,7 @@ impl Chunk {
 /// Placeholder até entrar um gerador com ruído de verdade.
 pub fn terrain_height(wx: i32, wz: i32) -> i32 {
     let (x, z) = (wx as f32, wz as f32);
-    let h = 12.0
-        + 4.0 * (x * 0.08).sin()
-        + 3.0 * (z * 0.11).cos()
-        + 2.0 * ((x + z) * 0.05).sin();
+    let h = 12.0 + 4.0 * (x * 0.08).sin() + 3.0 * (z * 0.11).cos() + 2.0 * ((x + z) * 0.05).sin();
     h.round() as i32
 }
 

@@ -102,7 +102,12 @@ fn remesh_dirty_chunks(
     if world.dirty.is_empty() {
         return;
     }
-    let batch: Vec<ChunkPos> = world.dirty.iter().copied().take(MESH_BUDGET_PER_FRAME).collect();
+    let batch: Vec<ChunkPos> = world
+        .dirty
+        .iter()
+        .copied()
+        .take(MESH_BUDGET_PER_FRAME)
+        .collect();
 
     for pos in batch {
         world.dirty.remove(&pos);

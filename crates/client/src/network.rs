@@ -13,7 +13,8 @@ pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        let url = std::env::var("VORTEX_SERVER").unwrap_or_else(|_| shared::DEFAULT_SERVER_URL.into());
+        let url =
+            std::env::var("VORTEX_SERVER").unwrap_or_else(|_| shared::DEFAULT_SERVER_URL.into());
         app.insert_resource(spawn_network_thread(url))
             .init_resource::<LocalPlayer>()
             .init_resource::<IncomingChunks>()
