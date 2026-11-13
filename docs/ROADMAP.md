@@ -18,18 +18,19 @@ Dê git pull no main e execute a tarefa T1 do docs/ROADMAP.md seguindo o CLAUDE.
 
 - [x] T0 — Base: mundo voxel, movimento autoritativo, arquitetura modular
 - [ ] T1 — Ajustes de movimento
-- [ ] T2 — Entidades e uma criatura que anda
-- [ ] T3 — Atributos, vida e morte
-- [ ] T4 — Alvo e combate corpo a corpo
-- [ ] T5 — Inimigo que persegue e ataca
-- [ ] T6 — Experiência e níveis
-- [ ] T7 — Inventário e loot
-- [ ] T8 — Equipamento
-- [ ] T9 — Habilidades, mana e recarga
-- [ ] T10 — NPCs e diálogo
-- [ ] T11 — Missões
-- [ ] T12 — Salvar personagem e progresso
-- [ ] T13 — Predição de movimento no cliente
+- [ ] T2 — Mira: raycast e bloco em destaque
+- [ ] T3 — Entidades e uma criatura que anda
+- [ ] T4 — Atributos, vida e morte
+- [ ] T5 — Alvo e combate corpo a corpo
+- [ ] T6 — Inimigo que persegue e ataca
+- [ ] T7 — Experiência e níveis
+- [ ] T8 — Inventário e loot
+- [ ] T9 — Equipamento
+- [ ] T10 — Habilidades, mana e recarga
+- [ ] T11 — NPCs e diálogo
+- [ ] T12 — Missões
+- [ ] T13 — Salvar personagem e progresso
+- [ ] T14 — Predição de movimento no cliente
 
 Ideias para depois, sem ordem: classes, efeitos de status (veneno, lentidão),
 ouro e lojas, grupo de jogadores, chat, zonas e masmorras, tipos variados de
@@ -56,7 +57,20 @@ Muda o movimento de propósito: regere os goldens de simulação.
 degrau de 1 bloco com folga e não de 2; F3, descer até atravessar o mundo,
 F3 de novo e o jogador reaparece em cima do terreno.
 
-### T2 — Entidades e uma criatura que anda
+### T2 — Mira: raycast e bloco em destaque
+
+- `engine-voxel`: raycast em voxels (DDA) que devolve o primeiro bloco sólido
+  no caminho, a face atingida e a distância. Testes com mundo sintético.
+- `client`: plugin que lança o raio da câmera a cada frame e desenha um
+  contorno no bloco mirado, até um alcance máximo (constante compartilhada no
+  núcleo, porque o servidor vai usar a mesma em T5). Mira no centro da tela.
+
+Só visual: nada muda no servidor nem no protocolo.
+
+**Testar jogando:** o contorno segue o bloco para onde você olha, some ao
+olhar para o céu ou para longe demais, e marca o bloco certo em quinas.
+
+### T3 — Entidades e uma criatura que anda
 
 - `game-sim`: generalize "jogador" para "entidade" (id, tipo, corpo físico),
   mantendo o jogador como um tipo. Criaturas usam o mesmo `Body` da física.
@@ -73,7 +87,7 @@ F3 de novo e o jogador reaparece em cima do terreno.
 blocos e sem se afastar demais da origem; com dois clientes, os dois veem as
 criaturas nos mesmos lugares.
 
-### T3 — Atributos, vida e morte
+### T4 — Atributos, vida e morte
 
 - Novo `engine-stats`: atributos base (ex.: força, agilidade, vitalidade,
   inteligência), valores derivados calculados a partir deles (vida máxima,
@@ -89,36 +103,37 @@ criaturas nos mesmos lugares.
 **Testar jogando:** pular de 3 blocos não machuca; cair de bem alto tira
 vida; de mais alto ainda mata e renasce no spawn; F3 não toma dano.
 
-### T4 — Alvo e combate corpo a corpo
+### T5 — Alvo e combate corpo a corpo
 
-- `engine-physics`: raio contra AABB de entidade; `engine-voxel`: raycast em
-  voxels (DDA), para o terreno bloquear a linha de visão.
+- `engine-physics`: raio contra AABB de entidade. O raycast em voxels de T2
+  é reaproveitado para o terreno bloquear a linha de visão.
 - `game-sim`: comando de ataque. O servidor refaz o raio a partir do olho e do
   yaw/pitch do jogador, valida alcance, linha de visão e recarga, e calcula o
-  dano a partir dos atributos (T3). Empurrão no alvo. Criatura morta some e
+  dano a partir dos atributos (T4). Empurrão no alvo. Criatura morta some e
   renasce na origem depois de um tempo.
 - `game-protocol`: ataque do cliente; evento de dano com valor.
-- `client`: mira no centro da tela; a entidade mirada fica destacada e mostra
+- `client`: o destaque da mira (T2) passa a marcar a entidade mirada; o
+  contorno de bloco fica só no modo debug (F3). A entidade mirada mostra
   nome e barra de vida; clique esquerdo ataca; número de dano flutuando.
 
 **Testar jogando:** mirar numa criatura e ver nome e vida; bater até morrer e
 ver renascer; clicar rápido não bate mais rápido que a recarga; não acertar
 de longe nem através de um morro; dois jogadores batendo na mesma criatura.
 
-### T5 — Inimigo que persegue e ataca
+### T6 — Inimigo que persegue e ataca
 
 - `engine-ai`: estados de perseguir, atacar e voltar para a origem, com raio
   de percepção e raio de desistência.
 - `game-sim`: tipo de criatura hostil na tabela de conteúdo (dano, alcance,
   recarga, percepção). Ela persegue o jogador mais próximo, ataca com as
-  mesmas regras de dano de T4 e volta para casa recuperando vida ao desistir.
-  Criaturas pacíficas de T2 continuam existindo.
+  mesmas regras de dano de T5 e volta para casa recuperando vida ao desistir.
+  Criaturas pacíficas de T3 continuam existindo.
 
 **Testar jogando:** chegar perto de um inimigo e ele vir atrás; tomar dano e
 morrer se ficar parado; fugir e ver ele desistir e voltar; com dois
 jogadores, ele escolhe o mais próximo.
 
-### T6 — Experiência e níveis
+### T7 — Experiência e níveis
 
 - Novo `engine-progression`: experiência, curva de nível e pontos de atributo
   ganhos por nível. Curva e recompensas são conteúdo.
@@ -133,7 +148,7 @@ jogadores, ele escolhe o mais próximo.
 gastar um ponto em força e bater mais forte; gastar em vitalidade e ver a
 vida máxima subir.
 
-### T7 — Inventário e loot
+### T8 — Inventário e loot
 
 - Novo `engine-inventory`: item, pilha com limite, inventário de slots
   (adicionar, remover, mover, empilhar). Puro e testado.
@@ -150,7 +165,7 @@ vida máxima subir.
 inventário e ver a pilha; usar uma poção e a vida subir; inventário cheio
 recusa o item, que continua no chão; com dois jogadores, só um pega.
 
-### T8 — Equipamento
+### T9 — Equipamento
 
 - `engine-inventory` ou crate próprio: slots de equipamento (arma, armadura)
   com regra de qual item entra em qual slot.
@@ -164,7 +179,7 @@ recusa o item, que continua no chão; com dois jogadores, só um pega.
 **Testar jogando:** equipar uma espada caída de um inimigo e matar mais
 rápido; equipar armadura e tomar menos dano; desequipar volta ao normal.
 
-### T9 — Habilidades, mana e recarga
+### T10 — Habilidades, mana e recarga
 
 - Novo `engine-abilities`: habilidade com custo, recarga, alcance e lista de
   efeitos (dano, cura, empurrão); controle de recarga por entidade. As
@@ -179,7 +194,7 @@ rápido; equipar armadura e tomar menos dano; desequipar volta ao normal.
 **Testar jogando:** usar cada habilidade e ver o efeito; ficar sem mana e não
 conseguir usar; ver a recarga contando; a mana voltar com o tempo.
 
-### T10 — NPCs e diálogo
+### T11 — NPCs e diálogo
 
 - Novo `engine-dialogue`: árvore de diálogo (falas, opções, saltos), pura e
   definida por dados.
@@ -192,13 +207,13 @@ conseguir usar; ver a recarga contando; a mana voltar com o tempo.
 encerrar; não conseguir falar de longe; não conseguir atacá-lo; dois
 jogadores conversam com o mesmo NPC sem interferir um no outro.
 
-### T11 — Missões
+### T12 — Missões
 
 - Novo `engine-quests`: missão com objetivos (matar N de um tipo, coletar N de
   um item, falar com alguém), progresso e estados (disponível, ativa,
   concluída, entregue). Reage a eventos, não conhece o jogo.
 - `game-sim`: missões na tabela de conteúdo, oferecidas e entregues por NPC
-  via diálogo (T10); os eventos da simulação (morte, coleta, conversa)
+  via diálogo (T11); os eventos da simulação (morte, coleta, conversa)
   alimentam o progresso; recompensa em experiência e itens.
 - `client`: lista de missões ativas no HUD com progresso; aviso ao concluir.
 
@@ -206,7 +221,7 @@ jogadores conversam com o mesmo NPC sem interferir um no outro.
 subir, voltar, entregar e receber experiência e item; não dá para entregar
 duas vezes.
 
-### T12 — Salvar personagem e progresso
+### T13 — Salvar personagem e progresso
 
 - `game-sim`: trait de armazenamento de personagem (porta), com implementação
   em memória para testes. Salva nível, experiência, atributos, inventário,
@@ -218,7 +233,7 @@ duas vezes.
 **Testar jogando:** evoluir o personagem, fechar cliente e servidor, abrir de
 novo com o mesmo nome e encontrar tudo; outro nome começa do zero.
 
-### T13 — Predição de movimento no cliente
+### T14 — Predição de movimento no cliente
 
 - `client`: roda o mesmo `engine-physics` localmente para o próprio jogador e
   reconcilia com o servidor usando `last_input_seq`, reaplicando os inputs
