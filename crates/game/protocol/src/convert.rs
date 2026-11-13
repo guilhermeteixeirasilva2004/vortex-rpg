@@ -2,9 +2,9 @@
 
 use engine_physics::MoveIntent;
 use engine_voxel::{Chunk, ChunkError, ChunkPos};
-use game_sim::{InputFrame, PlayerSnapshot, Snapshot};
+use game_sim::{CreatureSnapshot, InputFrame, PlayerSnapshot, Snapshot};
 
-use crate::{ChunkDto, ChunkPosDto, PlayerInput, PlayerState, ServerMessage};
+use crate::{ChunkDto, ChunkPosDto, CreatureState, PlayerInput, PlayerState, ServerMessage};
 
 impl PlayerInput {
     /// O servidor nunca confia no cliente: limita eixos e ângulos.
@@ -66,11 +66,25 @@ impl From<&PlayerSnapshot> for PlayerState {
     }
 }
 
+impl From<&CreatureSnapshot> for CreatureState {
+    fn from(c: &CreatureSnapshot) -> Self {
+        CreatureState {
+            id: c.id,
+            kind: c.kind.to_owned(),
+            feet: c.feet,
+            yaw: c.yaw,
+            width: c.width,
+            height: c.height,
+        }
+    }
+}
+
 impl From<&Snapshot> for ServerMessage {
     fn from(s: &Snapshot) -> Self {
         ServerMessage::Snapshot {
             tick: s.tick,
             players: s.players.iter().map(PlayerState::from).collect(),
+            creatures: s.creatures.iter().map(CreatureState::from).collect(),
         }
     }
 }

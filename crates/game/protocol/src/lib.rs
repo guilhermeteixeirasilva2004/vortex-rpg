@@ -10,8 +10,10 @@ mod convert;
 mod message;
 
 pub use codec::{decode, encode, ProtocolError};
-pub use message::{ChunkDto, ChunkPosDto, ClientMessage, PlayerInput, PlayerState, ServerMessage};
+pub use message::{
+    ChunkDto, ChunkPosDto, ClientMessage, CreatureState, PlayerInput, PlayerState, ServerMessage,
+};
 
-pub use game_sim::PlayerId;
 /// Taxa de tick do servidor; o cliente envia input na mesma taxa.
 pub use game_sim::TICK_RATE;
+pub use game_sim::{CreatureId, PlayerId};

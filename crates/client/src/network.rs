@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crossbeam_channel::{Receiver, Sender};
 use engine_voxel::Chunk;
 use futures_util::{SinkExt, StreamExt};
-use game_protocol::{ClientMessage, PlayerId, PlayerState, ServerMessage};
+use game_protocol::{ClientMessage, CreatureState, PlayerId, PlayerState, ServerMessage};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -55,6 +55,8 @@ pub struct LatestSnapshot {
     pub tick: u64,
     /// Estado dos jogadores.
     pub players: Vec<PlayerState>,
+    /// Estado das criaturas.
+    pub creatures: Vec<CreatureState>,
 }
 
 fn receive_messages(
@@ -73,10 +75,15 @@ fn receive_messages(
                 Ok(chunk) => chunks.0.push(chunk),
                 Err(e) => warn!("chunk inválido recebido: {e}"),
             },
-            ServerMessage::Snapshot { tick, players } => {
+            ServerMessage::Snapshot {
+                tick,
+                players,
+                creatures,
+            } => {
                 if tick >= snapshot.tick {
                     snapshot.tick = tick;
                     snapshot.players = players;
+                    snapshot.creatures = creatures;
                 }
             }
         }
