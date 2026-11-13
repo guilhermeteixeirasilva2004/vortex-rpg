@@ -1816,6 +1816,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "engine-ai"
+version = "0.1.0"
+
+[[package]]
 name = "engine-meshing"
 version = "0.1.0"
 dependencies = [
