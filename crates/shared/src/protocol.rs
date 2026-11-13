@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::voxel::Chunk;
+use engine_voxel::{Chunk, ChunkError, ChunkPos};
 
 pub type PlayerId = u64;
 
@@ -74,13 +74,48 @@ pub struct PlayerState {
     pub last_input_seq: u32,
 }
 
+/// Posição de chunk no fio.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct ChunkPosDto {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+/// Chunk no fio: posição + bytes crus (índice = x + z*16 + y*256).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkDto {
+    pub pos: ChunkPosDto,
+    pub blocks: Vec<u8>,
+}
+
+impl From<&Chunk> for ChunkDto {
+    fn from(chunk: &Chunk) -> Self {
+        let ChunkPos { x, y, z } = chunk.pos();
+        Self {
+            pos: ChunkPosDto { x, y, z },
+            blocks: chunk.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl TryFrom<ChunkDto> for Chunk {
+    type Error = ChunkError;
+
+    /// Valida o tamanho do buffer (dados de rede não são confiáveis).
+    fn try_from(dto: ChunkDto) -> Result<Self, ChunkError> {
+        let ChunkPosDto { x, y, z } = dto.pos;
+        Chunk::from_bytes(ChunkPos::new(x, y, z), dto.blocks)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
     Welcome {
         player_id: PlayerId,
         spawn: [f32; 3],
     },
-    ChunkData(Chunk),
+    ChunkData(ChunkDto),
     Snapshot {
         tick: u64,
         players: Vec<PlayerState>,
@@ -100,7 +135,7 @@ pub fn decode<'a, T: Deserialize<'a>>(text: &'a str) -> Result<T, serde_json::Er
 #[cfg(test)]
 mod golden {
     use super::*;
-    use crate::voxel::{Block, ChunkPos};
+    use engine_voxel::Block;
 
     fn input() -> PlayerInput {
         PlayerInput {
@@ -183,7 +218,7 @@ mod golden {
         chunk.set(1, 0, 0, Block::Dirt);
         chunk.set(0, 0, 1, Block::Stone); // índice 16
         chunk.set(15, 15, 15, Block::Grass); // último índice
-        let json = encode(&ServerMessage::ChunkData(chunk)).unwrap();
+        let json = encode(&ServerMessage::ChunkData(ChunkDto::from(&chunk))).unwrap();
 
         let mut blocks = vec!["0"; 4096];
         blocks[0] = "1";
@@ -199,7 +234,8 @@ mod golden {
         let ServerMessage::ChunkData(back) = decode::<ServerMessage>(&json).unwrap() else {
             panic!("esperava ChunkData");
         };
-        assert!(back.is_valid());
+        let back = Chunk::try_from(back).unwrap();
+        assert_eq!(back, chunk);
         assert_eq!(back.get(0, 0, 1), Some(Block::Stone));
     }
 }

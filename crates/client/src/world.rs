@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
-use shared::voxel::{Block, Chunk, ChunkPos, CHUNK_SIZE_I32};
+use engine_voxel::{ChunkMap, ChunkPos};
 
 use crate::meshing::build_chunk_mesh;
 use crate::network::IncomingChunks;
@@ -24,26 +24,9 @@ impl Plugin for WorldPlugin {
 
 #[derive(Resource, Default)]
 pub struct ClientWorld {
-    chunks: HashMap<ChunkPos, Chunk>,
+    chunks: ChunkMap,
     entities: HashMap<ChunkPos, Entity>,
     dirty: HashSet<ChunkPos>,
-}
-
-impl ClientWorld {
-    /// Bloco em coordenadas de mundo. Chunks não carregados contam como ar.
-    pub fn block(&self, x: i32, y: i32, z: i32) -> Block {
-        let pos = ChunkPos::from_world_block(x, y, z);
-        self.chunks
-            .get(&pos)
-            .and_then(|c| {
-                c.get(
-                    x.rem_euclid(CHUNK_SIZE_I32),
-                    y.rem_euclid(CHUNK_SIZE_I32),
-                    z.rem_euclid(CHUNK_SIZE_I32),
-                )
-            })
-            .unwrap_or_default()
-    }
 }
 
 #[derive(Resource)]
@@ -81,12 +64,12 @@ fn ingest_chunks(mut incoming: ResMut<IncomingChunks>, mut world: ResMut<ClientW
         return;
     }
     for chunk in incoming.0.drain(..) {
-        let pos = chunk.pos;
-        world.chunks.insert(pos, chunk);
+        let pos = chunk.pos();
+        world.chunks.insert(chunk);
         world.dirty.insert(pos);
         // Vizinhos já carregados podem ter faces que agora ficaram ocultas.
         for n in pos.neighbors() {
-            if world.chunks.contains_key(&n) {
+            if world.chunks.contains(n) {
                 world.dirty.insert(n);
             }
         }
@@ -111,11 +94,11 @@ fn remesh_dirty_chunks(
 
     for pos in batch {
         world.dirty.remove(&pos);
-        let Some(chunk) = world.chunks.get(&pos) else {
+        let Some(chunk) = world.chunks.get(pos) else {
             continue;
         };
         let [ox, oy, oz] = pos.world_origin();
-        let mesh = build_chunk_mesh(chunk, |x, y, z| world.block(ox + x, oy + y, oz + z));
+        let mesh = build_chunk_mesh(chunk, |x, y, z| world.chunks.block(ox + x, oy + y, oz + z));
 
         if let Some(old) = world.entities.remove(&pos) {
             commands.entity(old).despawn();

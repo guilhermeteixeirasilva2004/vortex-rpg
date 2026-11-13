@@ -1451,6 +1451,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "crossbeam-channel",
+ "engine-voxel",
  "futures-util",
  "shared",
  "tokio",
@@ -1810,6 +1811,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "engine-voxel"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3691,6 +3699,7 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "engine-voxel",
  "futures-util",
  "shared",
  "tokio",
@@ -3722,6 +3731,7 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "engine-voxel",
  "serde",
  "serde_json",
 ]

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::Utf8Bytes;
-use shared::movement::{Body, VoxelQuery, EYE_HEIGHT};
+use engine_voxel::{ChunkMap, ChunkPos, WorldGenerator};
+use shared::movement::{Body, EYE_HEIGHT};
 use shared::protocol::{self, PlayerId, PlayerInput, PlayerState, ServerMessage};
-use shared::voxel::{terrain_height, Chunk, ChunkPos, CHUNK_SIZE_I32};
 use shared::{SERVER_TICK_RATE, TICK_DT};
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::MissedTickBehavior;
@@ -25,52 +26,56 @@ struct Player {
     input: PlayerInput,
 }
 
-/// Chunks indexados por posição, para a física consultar blocos.
-/// Chunks ausentes (vazios ou fora do mundo gerado) contam como ar.
-struct Terrain(HashMap<ChunkPos, Chunk>);
-
-impl VoxelQuery for Terrain {
-    fn is_solid(&self, x: i32, y: i32, z: i32) -> bool {
-        self.0
-            .get(&ChunkPos::from_world_block(x, y, z))
-            .and_then(|c| {
-                c.get(
-                    x.rem_euclid(CHUNK_SIZE_I32),
-                    y.rem_euclid(CHUNK_SIZE_I32),
-                    z.rem_euclid(CHUNK_SIZE_I32),
-                )
-            })
-            .is_some_and(|b| b.is_solid())
-    }
-}
+/// Mundo inicial: 8x2x8 chunks ao redor da origem.
+const WORLD_RADIUS_CHUNKS: i32 = 4;
+const WORLD_HEIGHT_CHUNKS: i32 = 2;
 
 pub struct GameWorld {
-    chunks: Vec<Chunk>,
-    terrain: Terrain,
+    /// Única cópia dos chunks; a camada de rede compartilha o mesmo `Arc`.
+    /// Chunks ausentes (vazios ou fora do mundo gerado) contam como ar.
+    chunks: Arc<ChunkMap>,
+    spawn: [f32; 3],
     players: HashMap<PlayerId, Player>,
     tick: u64,
     /// Se o servidor aceita o modo voo (debug) pedido pelos clientes.
     allow_fly: bool,
 }
 
-pub fn spawn_point() -> [f32; 3] {
-    [0.5, terrain_height(0, 0) as f32 + 1.0 + EYE_HEIGHT, 0.5]
-}
-
 impl GameWorld {
-    pub fn new(chunks: Vec<Chunk>, allow_fly: bool) -> Self {
-        let terrain = Terrain(chunks.iter().map(|c| (c.pos, c.clone())).collect());
+    pub fn new(generator: &impl WorldGenerator, allow_fly: bool) -> Self {
+        let mut chunks = ChunkMap::new();
+        for x in -WORLD_RADIUS_CHUNKS..WORLD_RADIUS_CHUNKS {
+            for z in -WORLD_RADIUS_CHUNKS..WORLD_RADIUS_CHUNKS {
+                for y in 0..WORLD_HEIGHT_CHUNKS {
+                    let chunk = generator.generate_chunk(ChunkPos::new(x, y, z));
+                    if !chunk.is_empty() {
+                        chunks.insert(chunk);
+                    }
+                }
+            }
+        }
+        tracing::info!("mundo gerado: {} chunks não vazios", chunks.len());
+        let spawn = [
+            0.5,
+            generator.surface_height(0, 0) as f32 + 1.0 + EYE_HEIGHT,
+            0.5,
+        ];
         Self {
-            chunks,
-            terrain,
+            chunks: Arc::new(chunks),
+            spawn,
             players: HashMap::new(),
             tick: 0,
             allow_fly,
         }
     }
 
-    pub fn chunks(&self) -> &[Chunk] {
+    pub fn chunks(&self) -> &Arc<ChunkMap> {
         &self.chunks
+    }
+
+    /// Onde jogadores nascem (e renascem ao cair no vazio).
+    pub fn spawn(&self) -> [f32; 3] {
+        self.spawn
     }
 
     fn handle(&mut self, event: GameEvent) {
@@ -80,7 +85,7 @@ impl GameWorld {
                 self.players.insert(
                     id,
                     Player {
-                        body: Body::at(spawn_point()),
+                        body: Body::at(self.spawn),
                         input: PlayerInput::default(),
                     },
                 );
@@ -104,10 +109,10 @@ impl GameWorld {
         self.tick += 1;
         for (id, p) in self.players.iter_mut() {
             p.body
-                .step(&p.input, &self.terrain, TICK_DT, self.allow_fly);
+                .step(&p.input, self.chunks.as_ref(), TICK_DT, self.allow_fly);
             if p.body.position[1] < VOID_Y {
                 tracing::info!("jogador {id} caiu no vazio, voltando ao spawn");
-                p.body = Body::at(spawn_point());
+                p.body = Body::at(self.spawn);
             }
         }
     }
@@ -170,22 +175,10 @@ mod golden {
     use std::fmt::Write;
 
     use super::*;
-    use shared::voxel::{generate_chunk, ChunkPos};
+    use engine_voxel::HeightmapGenerator;
 
-    /// Mesmo mundo que o `main` gera.
     fn world(allow_fly: bool) -> GameWorld {
-        let mut chunks = Vec::new();
-        for x in -4..4 {
-            for z in -4..4 {
-                for y in 0..2 {
-                    let chunk = generate_chunk(ChunkPos::new(x, y, z));
-                    if !chunk.is_empty() {
-                        chunks.push(chunk);
-                    }
-                }
-            }
-        }
-        GameWorld::new(chunks, allow_fly)
+        GameWorld::new(&HeightmapGenerator, allow_fly)
     }
 
     /// (forward, right, up, fly, yaw) de cada jogador no tick `t`.

@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 shared.workspace = true
+engine-voxel.workspace = true
 axum.workspace = true
 tokio.workspace = true
 futures-util.workspace = true

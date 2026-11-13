@@ -5,6 +5,8 @@
 //! `position` é sempre a posição do olho; o corpo é uma AABB de
 //! `PLAYER_WIDTH` x `PLAYER_HEIGHT` cujo pé fica em `position.y - EYE_HEIGHT`.
 
+pub use engine_voxel::VoxelQuery;
+
 use crate::protocol::PlayerInput;
 
 /// Velocidade horizontal andando (blocos/s).
@@ -29,11 +31,6 @@ const SKIN: f32 = 1e-3;
 /// Quantos blocos no máximo o jogador é empurrado para cima se começar o
 /// tick dentro de terreno (ex.: saiu do voo atravessando o chão).
 const MAX_UNSTUCK: i32 = 32;
-
-/// O que a física precisa saber do mundo.
-pub trait VoxelQuery {
-    fn is_solid(&self, x: i32, y: i32, z: i32) -> bool;
-}
 
 /// Estado físico de um jogador. É isto que o servidor guarda e avança a cada tick.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

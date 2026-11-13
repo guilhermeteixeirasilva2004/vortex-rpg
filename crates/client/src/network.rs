@@ -3,9 +3,9 @@
 
 use bevy::prelude::*;
 use crossbeam_channel::{Receiver, Sender};
+use engine_voxel::Chunk;
 use futures_util::{SinkExt, StreamExt};
 use shared::protocol::{self, ClientMessage, PlayerId, PlayerState, ServerMessage};
-use shared::voxel::Chunk;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -64,13 +64,10 @@ fn receive_messages(
                 info!("conectado como jogador {player_id}, spawn em {spawn:?}");
                 local.id = Some(player_id);
             }
-            ServerMessage::ChunkData(chunk) => {
-                if chunk.is_valid() {
-                    chunks.0.push(chunk);
-                } else {
-                    warn!("chunk inválido recebido em {:?}", chunk.pos);
-                }
-            }
+            ServerMessage::ChunkData(dto) => match Chunk::try_from(dto) {
+                Ok(chunk) => chunks.0.push(chunk),
+                Err(e) => warn!("chunk inválido recebido: {e}"),
+            },
             ServerMessage::Snapshot { tick, players } => {
                 if tick >= snapshot.tick {
                     snapshot.tick = tick;

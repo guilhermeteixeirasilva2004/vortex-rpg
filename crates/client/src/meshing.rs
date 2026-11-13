@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::render::mesh::{Indices, Mesh};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
-use shared::voxel::{Block, Chunk, CHUNK_SIZE_I32};
+use engine_voxel::{Block, Chunk, CHUNK_SIZE_I32};
 
 struct Face {
     normal: [f32; 3],

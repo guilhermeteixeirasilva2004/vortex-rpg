@@ -6,18 +6,19 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
+use engine_voxel::ChunkMap;
 use futures_util::{SinkExt, StreamExt};
-use shared::protocol::{self, ClientMessage, ServerMessage};
-use shared::voxel::Chunk;
+use shared::protocol::{self, ChunkDto, ClientMessage, ServerMessage};
 use tokio::sync::{broadcast, mpsc};
 
-use crate::game::{spawn_point, GameEvent};
+use crate::game::GameEvent;
 
 #[derive(Clone)]
 pub struct AppState {
     events: mpsc::UnboundedSender<GameEvent>,
     snapshots: broadcast::Sender<Utf8Bytes>,
-    chunks: Arc<Vec<Chunk>>,
+    chunks: Arc<ChunkMap>,
+    spawn: [f32; 3],
     next_id: Arc<AtomicU64>,
 }
 
@@ -25,12 +26,14 @@ impl AppState {
     pub fn new(
         events: mpsc::UnboundedSender<GameEvent>,
         snapshots: broadcast::Sender<Utf8Bytes>,
-        chunks: Arc<Vec<Chunk>>,
+        chunks: Arc<ChunkMap>,
+        spawn: [f32; 3],
     ) -> Self {
         Self {
             events,
             snapshots,
             chunks,
+            spawn,
             next_id: Arc::new(AtomicU64::new(1)),
         }
     }
@@ -65,7 +68,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         &mut socket,
         &ServerMessage::Welcome {
             player_id: id,
-            spawn: spawn_point(),
+            spawn: state.spawn,
         },
     )
     .await
@@ -73,7 +76,12 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         return;
     }
     for chunk in state.chunks.iter() {
-        if !send(&mut socket, &ServerMessage::ChunkData(chunk.clone())).await {
+        if !send(
+            &mut socket,
+            &ServerMessage::ChunkData(ChunkDto::from(chunk)),
+        )
+        .await
+        {
             return;
         }
     }
