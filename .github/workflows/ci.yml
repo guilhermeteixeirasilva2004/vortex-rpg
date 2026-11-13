@@ -32,3 +32,6 @@ jobs:
 
       - name: Testes
         run: cargo test --workspace
+
+      - name: Regra de dependência
+        run: ./scripts/check-deps.sh
