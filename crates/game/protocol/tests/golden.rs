@@ -81,6 +81,7 @@ fn server_snapshot_from_domain() {
             flying: true,
             last_input_seq: 12,
         }],
+        creatures: vec![],
     };
     let json = encode(&ServerMessage::from(&snapshot)).unwrap();
     assert_eq!(
