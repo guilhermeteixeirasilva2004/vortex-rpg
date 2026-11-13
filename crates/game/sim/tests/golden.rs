@@ -16,6 +16,7 @@ fn sim(allow_fly: bool) -> Simulation {
         world_radius_chunks: 4,
         world_height_chunks: 2,
         allow_fly,
+        seed: 0,
     };
     Simulation::new(&HeightmapGenerator, config)
 }

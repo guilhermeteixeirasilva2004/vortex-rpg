@@ -36,7 +36,7 @@ Pergunte nesta ordem e pare na primeira resposta "sim":
    atrás de um trait definido no núcleo quando o núcleo precisar chamá-lo.
 5. É teclado, câmera, malha, HUD? → um plugin em `client`.
 
-Um crate de engine novo faz **uma** coisa (inventário, raycast, vida), tem
+Um crate de engine novo faz **uma** coisa (atributos, inventário, missões), tem
 `description` no `Cargo.toml`, `[lints] workspace = true`, e entra em
 `[workspace.dependencies]`.
 
@@ -52,9 +52,18 @@ está pronta quando dá para jogar:
 4. **Servidor** — só encanamento, se precisar.
 5. **Cliente** — plugin novo ou sistema novo num plugin existente.
 
-O servidor é autoritativo: o cliente manda intenção ("quero quebrar o bloco
-que estou olhando"), nunca resultado ("o bloco X sumiu"). O servidor valida
-alcance, posse e estado antes de aplicar.
+O servidor é autoritativo: o cliente manda intenção ("quero atacar o alvo
+que estou olhando"), nunca resultado ("o inimigo X perdeu 10 de vida"). O
+servidor valida alcance, recarga, custo e estado antes de aplicar.
+
+## Sistema na engine, conteúdo no jogo
+
+O jogo é um RPG; os blocos são só o visual do mundo. Os crates de engine
+trazem os **sistemas** (atributos, inventário, habilidades, missões) sem
+conhecer nenhum item, inimigo ou habilidade específica. O **conteúdo** (quais
+itens existem, quanto de vida tem cada inimigo, o que cada habilidade faz) é
+dado, definido em `game-sim` em tabelas num módulo próprio, nunca espalhado em
+`if` pelo código nem dentro da engine.
 
 ## Regras de código
 
@@ -81,7 +90,7 @@ alcance, posse e estado antes de aplicar.
 ## Testes
 
 - Engine e simulação: teste unitário para cada regra e cada caso de borda
-  (limite de alcance, inventário cheio, vida zero).
+  (limite de alcance, inventário cheio, vida zero, recarga ainda ativa).
 - Mecânica nova na simulação: um teste de integração em `crates/game/sim/tests`
   que aplica comandos e confere snapshot/eventos, sem rede.
 - Protocolo: todo DTO novo ganha caso em `crates/game/protocol/tests/golden.rs`.

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use game_sim::PlayerId;
+use game_sim::{CreatureId, PlayerId};
 
 /// Estado de input "segurado" no momento. O cliente não manda posição:
 /// o servidor aplica o input e decide onde o jogador está.
@@ -48,6 +48,23 @@ pub struct PlayerState {
     pub last_input_seq: u32,
 }
 
+/// Estado de uma criatura como o cliente recebe.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CreatureState {
+    /// Criatura (espaço de ids separado do dos jogadores).
+    pub id: CreatureId,
+    /// Nome do tipo (ex.: "coelho"); o cliente escolhe a aparência por ele.
+    pub kind: String,
+    /// Posição do pé (centro da base do corpo).
+    pub feet: [f32; 3],
+    /// Radianos, em torno de Y.
+    pub yaw: f32,
+    /// Largura do corpo em X e Z (blocos).
+    pub width: f32,
+    /// Altura do corpo (blocos).
+    pub height: f32,
+}
+
 /// Posição de chunk no fio.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ChunkPosDto {
@@ -80,11 +97,15 @@ pub enum ServerMessage {
     },
     /// Um chunk do mundo.
     ChunkData(ChunkDto),
-    /// Estado dos jogadores após um tick.
+    /// Estado das entidades após um tick.
     Snapshot {
         /// Número do tick.
         tick: u64,
         /// Jogadores.
         players: Vec<PlayerState>,
+        /// Criaturas. Omitido quando vazio, para o JSON sem criaturas ficar
+        /// igual ao de antes delas.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        creatures: Vec<CreatureState>,
     },
 }

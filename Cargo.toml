@@ -4,6 +4,7 @@ members = [
     "crates/engine/voxel",
     "crates/engine/physics",
     "crates/engine/meshing",
+    "crates/engine/ai",
     "crates/game/sim",
     "crates/game/protocol",
     "crates/client",
@@ -29,6 +30,7 @@ todo = "warn"
 engine-voxel = { path = "crates/engine/voxel" }
 engine-physics = { path = "crates/engine/physics" }
 engine-meshing = { path = "crates/engine/meshing" }
+engine-ai = { path = "crates/engine/ai" }
 game-sim = { path = "crates/game/sim" }
 game-protocol = { path = "crates/game/protocol" }
 

@@ -3,7 +3,7 @@
 
 use engine_voxel::{Block, Chunk, ChunkPos};
 use game_protocol::*;
-use game_sim::{PlayerSnapshot, Snapshot};
+use game_sim::{CreatureSnapshot, PlayerSnapshot, Snapshot};
 
 fn input() -> PlayerInput {
     PlayerInput {
@@ -61,6 +61,7 @@ fn server_snapshot() {
             flying: true,
             last_input_seq: 12,
         }],
+        creatures: vec![],
     })
     .unwrap();
     assert_eq!(
@@ -81,6 +82,7 @@ fn server_snapshot_from_domain() {
             flying: true,
             last_input_seq: 12,
         }],
+        creatures: vec![],
     };
     let json = encode(&ServerMessage::from(&snapshot)).unwrap();
     assert_eq!(
@@ -96,6 +98,40 @@ fn snapshot_without_flying_decodes() {
         panic!("esperava Snapshot");
     };
     assert!(!players[0].flying);
+}
+
+#[test]
+fn server_snapshot_with_creatures_from_domain() {
+    let snapshot = Snapshot {
+        tick: 5,
+        players: vec![],
+        creatures: vec![CreatureSnapshot {
+            id: 2,
+            kind: "coelho",
+            feet: [6.5, 13.0, -4.5],
+            yaw: 1.5,
+            width: 0.5,
+            height: 0.75,
+        }],
+    };
+    let json = encode(&ServerMessage::from(&snapshot)).unwrap();
+    assert_eq!(
+        json,
+        r#"{"Snapshot":{"tick":5,"players":[],"creatures":[{"id":2,"kind":"coelho","feet":[6.5,13.0,-4.5],"yaw":1.5,"width":0.5,"height":0.75}]}}"#
+    );
+    let ServerMessage::Snapshot { creatures, .. } = decode::<ServerMessage>(&json).unwrap() else {
+        panic!("esperava Snapshot");
+    };
+    assert_eq!(creatures, [CreatureState::from(&snapshot.creatures[0])]);
+}
+
+#[test]
+fn snapshot_without_creatures_decodes_empty() {
+    let json = r#"{"Snapshot":{"tick":1,"players":[]}}"#;
+    let ServerMessage::Snapshot { creatures, .. } = decode::<ServerMessage>(json).unwrap() else {
+        panic!("esperava Snapshot");
+    };
+    assert!(creatures.is_empty());
 }
 
 #[test]

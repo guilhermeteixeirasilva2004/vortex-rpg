@@ -22,6 +22,8 @@ use crate::net::AppState;
 /// Mundo inicial: 8x2x8 chunks ao redor da origem.
 const WORLD_RADIUS_CHUNKS: i32 = 4;
 const WORLD_HEIGHT_CHUNKS: i32 = 2;
+/// Seed fixa: o mesmo servidor sempre começa a partida igual.
+const WORLD_SEED: u64 = 0x5EED;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -40,6 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             world_radius_chunks: WORLD_RADIUS_CHUNKS,
             world_height_chunks: WORLD_HEIGHT_CHUNKS,
             allow_fly: config.allow_fly,
+            seed: WORLD_SEED,
         },
     );
     tracing::info!("mundo gerado: {} chunks não vazios", sim.chunks().len());

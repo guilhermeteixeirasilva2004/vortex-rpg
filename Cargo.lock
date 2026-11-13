@@ -1816,6 +1816,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "engine-ai"
+version = "0.1.0"
+
+[[package]]
 name = "engine-meshing"
 version = "0.1.0"
 dependencies = [
@@ -2059,6 +2063,7 @@ dependencies = [
 name = "game-sim"
 version = "0.1.0"
 dependencies = [
+ "engine-ai",
  "engine-physics",
  "engine-voxel",
 ]

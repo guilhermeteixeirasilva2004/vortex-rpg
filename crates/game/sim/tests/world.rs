@@ -22,6 +22,7 @@ fn sim() -> Simulation {
         world_radius_chunks: 1,
         world_height_chunks: 1,
         allow_fly: false,
+        seed: 0,
     };
     Simulation::new(&EmptyWorld, config)
 }
