@@ -1,0 +1,12 @@
+# Build
+/target
+**/*.rs.bk
+
+# Ambiente local
+.env
+.env.*
+!.env.example
+
+# Logs e arquivos temporários
+*.log
+.DS_Store

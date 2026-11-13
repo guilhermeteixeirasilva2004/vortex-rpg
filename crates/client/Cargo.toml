@@ -1,0 +1,17 @@
+[package]
+name = "client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+shared.workspace = true
+bevy.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+crossbeam-channel.workspace = true
+
+[features]
+# Suporte nativo a Wayland (requer libwayland-dev). Sem isso roda via XWayland.
+wayland = ["bevy/wayland"]
