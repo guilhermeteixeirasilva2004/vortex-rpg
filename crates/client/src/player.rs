@@ -21,11 +21,12 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Time::<Fixed>::from_hz(f64::from(shared::SERVER_TICK_RATE)))
             .init_resource::<InputSeq>()
+            .init_resource::<FlyRequest>()
             .init_resource::<RemotePlayers>()
             .add_systems(Startup, spawn_camera)
             .add_systems(
                 Update,
-                (cursor_grab, mouse_look, apply_snapshot, smooth_follow).chain(),
+                (cursor_grab, toggle_fly, mouse_look, apply_snapshot, smooth_follow).chain(),
             )
             .add_systems(FixedUpdate, send_input);
     }
@@ -44,6 +45,11 @@ struct RemotePlayer;
 
 #[derive(Resource, Default)]
 struct InputSeq(u32);
+
+/// Modo voo (debug) pedido ao servidor. Quem decide se vale é o servidor;
+/// o estado real chega no snapshot (`PlayerState::flying`).
+#[derive(Resource, Default)]
+pub struct FlyRequest(pub bool);
 
 #[derive(Resource, Default)]
 struct RemotePlayers(HashMap<PlayerId, Entity>);
@@ -88,6 +94,13 @@ fn cursor_grab(
     }
 }
 
+fn toggle_fly(keys: Res<ButtonInput<KeyCode>>, mut fly: ResMut<FlyRequest>) {
+    if keys.just_pressed(KeyCode::F3) {
+        fly.0 = !fly.0;
+        info!("modo voo pedido: {}", fly.0);
+    }
+}
+
 fn mouse_look(
     motion: Res<AccumulatedMouseMotion>,
     window: Single<&Window, With<PrimaryWindow>>,
@@ -111,6 +124,7 @@ fn send_input(
     camera: Single<&PlayerCamera>,
     net: Res<NetClient>,
     local: Res<LocalPlayer>,
+    fly: Res<FlyRequest>,
     mut seq: ResMut<InputSeq>,
 ) {
     if local.id.is_none() {
@@ -121,7 +135,9 @@ fn send_input(
         seq: seq.0,
         forward: axis(&keys, KeyCode::KeyW, KeyCode::KeyS),
         right: axis(&keys, KeyCode::KeyD, KeyCode::KeyA),
+        // Andando: Espaço = pulo. Voando: Espaço/Shift sobem/descem.
         up: axis(&keys, KeyCode::Space, KeyCode::ShiftLeft),
+        fly: fly.0,
         yaw: camera.yaw,
         pitch: camera.pitch,
     }));

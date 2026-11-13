@@ -18,8 +18,11 @@ pub struct PlayerInput {
     pub forward: f32,
     /// -1..1 (A..D)
     pub right: f32,
-    /// -1..1 (Shift..Space)
+    /// -1..1 (Shift..Space). Andando, `up > 0` é pulo; voando, sobe/desce.
     pub up: f32,
+    /// Pedido de voo livre (debug, F3). O servidor decide se permite.
+    #[serde(default)]
+    pub fly: bool,
     /// Radianos, rotação em torno de Y.
     pub yaw: f32,
     /// Radianos, olhar pra cima/baixo.
@@ -58,6 +61,9 @@ pub struct PlayerState {
     pub position: [f32; 3],
     pub yaw: f32,
     pub pitch: f32,
+    /// Voo livre (debug) ativo para este jogador.
+    #[serde(default)]
+    pub flying: bool,
     /// Último `seq` de input processado (base para predição/reconciliação futura).
     pub last_input_seq: u32,
 }

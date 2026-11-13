@@ -20,7 +20,8 @@ crates/
   (mensagens cliente/servidor em JSON) e `movement.rs` (simulação determinística
   compartilhada).
 - **server** — gera o mundo inicial (8x2x8 chunks em torno da origem), recebe
-  input, simula a 20 Hz e faz broadcast de snapshots.
+  input, simula a 20 Hz (gravidade, pulo e colisão AABB contra voxels) e faz
+  broadcast de snapshots. O modo voo (F3) só vale se o servidor permitir.
 - **client** — renderiza o mundo, faz a malha dos chunks (meshing) e envia o
   input a 20 Hz. Sem áudio, gamepad ou glTF para manter leve em GPU integrada.
 
@@ -53,6 +54,7 @@ Por padrão o servidor escuta em `0.0.0.0:3000` e o cliente conecta em
 | `VORTEX_BIND`    | server  | `0.0.0.0:3000`             |
 | `VORTEX_SERVER`  | client  | `ws://127.0.0.1:3000/ws`   |
 | `RUST_LOG`       | server  | `info`                     |
+| `VORTEX_ALLOW_FLY` | server | `1` em debug, `0` em release |
 
 Com Wayland nativo:
 
@@ -66,7 +68,9 @@ cargo run -p client --features wayland
 | ------------------ | ---------------------- |
 | `W` / `S`          | frente / trás         |
 | `A` / `D`          | esquerda / direita    |
-| `Espaço` / `Shift` | subir / descer        |
+| `Espaço`           | pular                 |
+| `F3`               | modo voo (debug)      |
+| `Espaço` / `Shift` | subir / descer (voo)  |
 | Mouse              | olhar (yaw/pitch)     |
 | Clique esquerdo    | capturar o cursor     |
 | `Esc`              | liberar o cursor      |

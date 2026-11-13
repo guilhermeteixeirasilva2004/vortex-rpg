@@ -41,7 +41,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (snapshot_tx, _) = broadcast::channel(64);
 
-    let world = GameWorld::new(chunks);
+    // Voo livre (F3) é ferramenta de debug: liberado em build de debug,
+    // ou explicitamente com VORTEX_ALLOW_FLY=1 / desligado com =0.
+    let allow_fly = match std::env::var("VORTEX_ALLOW_FLY").as_deref() {
+        Ok("1" | "true") => true,
+        Ok("0" | "false") => false,
+        _ => cfg!(debug_assertions),
+    };
+    tracing::info!("modo voo (debug): {}", if allow_fly { "permitido" } else { "bloqueado" });
+    let world = GameWorld::new(chunks, allow_fly);
     let state = AppState::new(event_tx, snapshot_tx.clone(), Arc::new(world.chunks().to_vec()));
 
     tokio::spawn(game::run(world, event_rx, snapshot_tx));

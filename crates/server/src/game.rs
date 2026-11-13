@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use axum::extract::ws::Utf8Bytes;
-use shared::movement::{self, EYE_HEIGHT};
+use shared::movement::{Body, VoxelQuery, EYE_HEIGHT};
 use shared::protocol::{self, PlayerId, PlayerInput, PlayerState, ServerMessage};
-use shared::voxel::{terrain_height, Chunk};
+use shared::voxel::{terrain_height, Chunk, ChunkPos, CHUNK_SIZE_I32};
 use shared::{SERVER_TICK_RATE, TICK_DT};
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::MissedTickBehavior;
@@ -17,15 +17,40 @@ pub enum GameEvent {
     Input { id: PlayerId, input: PlayerInput },
 }
 
+/// Abaixo disso o jogador caiu para fora do mundo e volta ao spawn.
+const VOID_Y: f32 = -64.0;
+
 struct Player {
-    position: [f32; 3],
+    body: Body,
     input: PlayerInput,
+}
+
+/// Chunks indexados por posição, para a física consultar blocos.
+/// Chunks ausentes (vazios ou fora do mundo gerado) contam como ar.
+struct Terrain(HashMap<ChunkPos, Chunk>);
+
+impl VoxelQuery for Terrain {
+    fn is_solid(&self, x: i32, y: i32, z: i32) -> bool {
+        self.0
+            .get(&ChunkPos::from_world_block(x, y, z))
+            .and_then(|c| {
+                c.get(
+                    x.rem_euclid(CHUNK_SIZE_I32),
+                    y.rem_euclid(CHUNK_SIZE_I32),
+                    z.rem_euclid(CHUNK_SIZE_I32),
+                )
+            })
+            .is_some_and(|b| b.is_solid())
+    }
 }
 
 pub struct GameWorld {
     chunks: Vec<Chunk>,
+    terrain: Terrain,
     players: HashMap<PlayerId, Player>,
     tick: u64,
+    /// Se o servidor aceita o modo voo (debug) pedido pelos clientes.
+    allow_fly: bool,
 }
 
 pub fn spawn_point() -> [f32; 3] {
@@ -33,11 +58,14 @@ pub fn spawn_point() -> [f32; 3] {
 }
 
 impl GameWorld {
-    pub fn new(chunks: Vec<Chunk>) -> Self {
+    pub fn new(chunks: Vec<Chunk>, allow_fly: bool) -> Self {
+        let terrain = Terrain(chunks.iter().map(|c| (c.pos, c.clone())).collect());
         Self {
             chunks,
+            terrain,
             players: HashMap::new(),
             tick: 0,
+            allow_fly,
         }
     }
 
@@ -52,7 +80,7 @@ impl GameWorld {
                 self.players.insert(
                     id,
                     Player {
-                        position: spawn_point(),
+                        body: Body::at(spawn_point()),
                         input: PlayerInput::default(),
                     },
                 );
@@ -74,8 +102,12 @@ impl GameWorld {
 
     fn simulate(&mut self) {
         self.tick += 1;
-        for p in self.players.values_mut() {
-            p.position = movement::step(p.position, &p.input, TICK_DT);
+        for (id, p) in self.players.iter_mut() {
+            p.body.step(&p.input, &self.terrain, TICK_DT, self.allow_fly);
+            if p.body.position[1] < VOID_Y {
+                tracing::info!("jogador {id} caiu no vazio, voltando ao spawn");
+                p.body = Body::at(spawn_point());
+            }
         }
     }
 
@@ -87,9 +119,10 @@ impl GameWorld {
                 .iter()
                 .map(|(&id, p)| PlayerState {
                     id,
-                    position: p.position,
+                    position: p.body.position,
                     yaw: p.input.yaw,
                     pitch: p.input.pitch,
+                    flying: p.body.flying,
                     last_input_seq: p.input.seq,
                 })
                 .collect(),
