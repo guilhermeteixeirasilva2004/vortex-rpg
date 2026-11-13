@@ -11,19 +11,50 @@ WebSocket.
 
 ```
 crates/
-├── shared/  # tipos comuns: voxels, protocolo de rede e simulação de movimento
-├── server/  # servidor autoritativo (Axum + Tokio, WebSocket)
-└── client/  # cliente gráfico (Bevy + Tokio Tungstenite)
+├── engine/            # núcleo reutilizável: sem I/O, sem rede, sem framework
+│   ├── voxel/         # Block, Chunk, ChunkMap, VoxelQuery, WorldGenerator
+│   ├── physics/       # Body + MoveIntent: gravidade, pulo, colisão AABB, voo
+│   └── meshing/       # geometria de chunk (posições, normais, cores, índices)
+├── game/
+│   ├── sim/           # simulação autoritativa pura: comandos, tick, snapshot
+│   └── protocol/      # DTOs do fio, conversões DTO <-> domínio, codec JSON
+├── server/            # adaptadores: WebSocket (axum), loop de tick (tokio), config
+└── client/            # plugins Bevy: rede, mundo, câmera, input, jogadores, HUD
 ```
 
-- **shared** — `voxel.rs` (chunks e geração de terreno), `protocol.rs`
-  (mensagens cliente/servidor em JSON) e `movement.rs` (simulação determinística
-  compartilhada).
-- **server** — gera o mundo inicial (8x2x8 chunks em torno da origem), recebe
-  input, simula a 20 Hz (gravidade, pulo e colisão AABB contra voxels) e faz
-  broadcast de snapshots. O modo voo (F3) só vale se o servidor permitir.
-- **client** — renderiza o mundo, faz a malha dos chunks (meshing) e envia o
-  input a 20 Hz. Sem áudio, gamepad ou glTF para manter leve em GPU integrada.
+- **engine-voxel** — chunks 16³ e `ChunkMap` (a única busca de bloco por
+  coordenada de mundo). `WorldGenerator` é injetado na simulação;
+  `HeightmapGenerator` é o terreno atual.
+- **engine-physics** — `Body::step` recebe um `MoveIntent` (andar, `jump`,
+  `fly`, `fly_vertical`), nunca um tipo de rede.
+- **engine-meshing** — culling de faces ocultas; o cliente só converte para
+  `bevy::Mesh`.
+- **game-sim** — `Simulation::apply(Command)`, `tick()` e `snapshot()`. Não lê
+  relógio, ambiente nem rede; regras (tamanho do mundo, voo permitido) vêm de
+  `SimConfig`.
+- **game-protocol** — formato no fio (JSON) e a borda de validação: o input do
+  cliente é sanitizado aqui e o eixo `up` vira `jump`/`fly_vertical`.
+- **server** — `config.rs` (único lugar que lê o ambiente), `tick.rs` (loop a
+  20 Hz e broadcast), `net.rs` (WebSocket) e `main.rs` (composition root).
+- **client** — um plugin por responsabilidade. Sem áudio, gamepad ou glTF para
+  manter leve em GPU integrada.
+
+### Regra de dependência
+
+As dependências apontam sempre para dentro:
+
+```
+client ──┐
+         ├──> game-protocol ──> game-sim ──> engine-physics ──> engine-voxel
+server ──┘                                   engine-meshing ──> engine-voxel
+```
+
+- `engine-*` não depende de `game-*`, `server`, `client`, tokio, axum nem bevy.
+- `game-sim` não depende de tokio, axum, bevy nem serde_json.
+- `server` e `client` dependem do núcleo, nunca o contrário.
+
+Para conferir: `cargo tree -p game-sim -e normal` (e o mesmo para cada
+`engine-*`).
 
 ## Requisitos
 
@@ -75,13 +106,26 @@ cargo run -p client --features wayland
 | Clique esquerdo    | capturar o cursor     |
 | `Esc`              | liberar o cursor      |
 
-## Build
+## Build e qualidade
 
 ```bash
 cargo check --workspace
 cargo build --release -p server
 cargo build --release -p client
 ```
+
+O CI (`.github/workflows/ci.yml`) roda os mesmos comandos que valem localmente:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
+
+Os lints ficam em `[workspace.lints]` no `Cargo.toml` raiz. Os testes "golden"
+(`crates/game/protocol/tests/golden.rs` e `crates/game/sim/tests/golden.rs`)
+fixam o JSON no fio e o resultado da simulação bit a bit: se mudarem, mudou
+comportamento.
 
 O perfil de desenvolvimento usa `opt-level = 1` no workspace e `opt-level = 3`
 nas dependências, porque o Bevy é lento em debug sem otimização. O perfil

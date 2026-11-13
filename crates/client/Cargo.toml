@@ -18,3 +18,6 @@ crossbeam-channel.workspace = true
 [features]
 # Suporte nativo a Wayland (requer libwayland-dev). Sem isso roda via XWayland.
 wayland = ["bevy/wayland"]
+
+[lints]
+workspace = true
