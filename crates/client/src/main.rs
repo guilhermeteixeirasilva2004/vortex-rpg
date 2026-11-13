@@ -1,6 +1,7 @@
 //! Cliente: renderiza o mundo e manda input. Não simula nada autoritativo.
 
 mod camera;
+mod creatures;
 mod hud;
 mod input;
 mod network;
@@ -29,6 +30,7 @@ fn main() {
             camera::CameraPlugin,
             input::InputPlugin,
             remote_players::RemotePlayersPlugin,
+            creatures::CreaturesPlugin,
             hud::HudPlugin,
         ))
         .run();
