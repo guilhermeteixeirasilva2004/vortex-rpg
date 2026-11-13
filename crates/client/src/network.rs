@@ -43,15 +43,18 @@ pub struct LocalPlayer {
     pub id: Option<PlayerId>,
 }
 
+/// Chunks recebidos e ainda não processados pelo mundo.
 #[derive(Resource, Default)]
 pub struct IncomingChunks(pub Vec<Chunk>);
 
+/// Snapshot mais recente do servidor. Só é escrito quando chega um novo,
+/// então consumidores usam `is_changed()` para saber se há novidade.
 #[derive(Resource, Default)]
 pub struct LatestSnapshot {
+    /// Tick do snapshot.
     pub tick: u64,
+    /// Estado dos jogadores.
     pub players: Vec<PlayerState>,
-    /// Marcado quando chega snapshot novo; consumidores limpam.
-    pub fresh: bool,
 }
 
 fn receive_messages(
@@ -74,7 +77,6 @@ fn receive_messages(
                 if tick >= snapshot.tick {
                     snapshot.tick = tick;
                     snapshot.players = players;
-                    snapshot.fresh = true;
                 }
             }
         }

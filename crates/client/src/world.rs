@@ -3,15 +3,19 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
+use bevy::render::mesh::{Indices, Mesh};
+use bevy::render::render_asset::RenderAssetUsages;
+use bevy::render::render_resource::PrimitiveTopology;
+use engine_meshing::{build_chunk_geometry, ChunkGeometry};
 use engine_voxel::{ChunkMap, ChunkPos};
 
-use crate::meshing::build_chunk_mesh;
 use crate::network::IncomingChunks;
 
 /// Máximo de chunks remeshados por frame, para não travar o frame quando
 /// chegam muitos de uma vez.
 const MESH_BUDGET_PER_FRAME: usize = 8;
 
+/// Chunks recebidos, malhas e iluminação da cena.
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
@@ -23,7 +27,7 @@ impl Plugin for WorldPlugin {
 }
 
 #[derive(Resource, Default)]
-pub struct ClientWorld {
+struct ClientWorld {
     chunks: ChunkMap,
     entities: HashMap<ChunkPos, Entity>,
     dirty: HashSet<ChunkPos>,
@@ -98,12 +102,13 @@ fn remesh_dirty_chunks(
             continue;
         };
         let [ox, oy, oz] = pos.world_origin();
-        let mesh = build_chunk_mesh(chunk, |x, y, z| world.chunks.block(ox + x, oy + y, oz + z));
+        let mesh =
+            build_chunk_geometry(chunk, |x, y, z| world.chunks.block(ox + x, oy + y, oz + z));
 
         if let Some(old) = world.entities.remove(&pos) {
             commands.entity(old).despawn();
         }
-        if let Some(mesh) = mesh {
+        if let Some(mesh) = mesh.map(to_mesh) {
             let entity = commands
                 .spawn((
                     Mesh3d(meshes.add(mesh)),
@@ -114,4 +119,18 @@ fn remesh_dirty_chunks(
             world.entities.insert(pos, entity);
         }
     }
+}
+
+/// Converte a geometria pura do chunk para o formato do Bevy.
+fn to_mesh(g: ChunkGeometry) -> Mesh {
+    // RENDER_WORLD: a cópia na CPU é descartada após o upload (economiza RAM).
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, g.positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, g.normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, g.colors);
+    mesh.insert_indices(Indices::U32(g.indices));
+    mesh
 }

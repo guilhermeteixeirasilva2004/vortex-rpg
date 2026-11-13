@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/engine/voxel",
     "crates/engine/physics",
+    "crates/engine/meshing",
     "crates/game/sim",
     "crates/game/protocol",
     "crates/client",
@@ -17,6 +18,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 engine-voxel = { path = "crates/engine/voxel" }
 engine-physics = { path = "crates/engine/physics" }
+engine-meshing = { path = "crates/engine/meshing" }
 game-sim = { path = "crates/game/sim" }
 game-protocol = { path = "crates/game/protocol" }
 

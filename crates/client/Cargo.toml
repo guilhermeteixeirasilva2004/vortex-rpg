@@ -6,6 +6,8 @@ license.workspace = true
 
 [dependencies]
 engine-voxel.workspace = true
+engine-physics.workspace = true
+engine-meshing.workspace = true
 game-protocol.workspace = true
 bevy.workspace = true
 tokio.workspace = true

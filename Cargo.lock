@@ -1451,6 +1451,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "crossbeam-channel",
+ "engine-meshing",
+ "engine-physics",
  "engine-voxel",
  "futures-util",
  "game-protocol",
@@ -1811,6 +1813,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "engine-meshing"
+version = "0.1.0"
+dependencies = [
+ "engine-voxel",
 ]
 
 [[package]]

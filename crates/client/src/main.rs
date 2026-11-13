@@ -1,9 +1,10 @@
 //! Cliente: renderiza o mundo e manda input. Não simula nada autoritativo.
 
+mod camera;
 mod hud;
-mod meshing;
+mod input;
 mod network;
-mod player;
+mod remote_players;
 mod world;
 
 use bevy::prelude::*;
@@ -25,7 +26,9 @@ fn main() {
         .add_plugins((
             network::NetworkPlugin,
             world::WorldPlugin,
-            player::PlayerPlugin,
+            camera::CameraPlugin,
+            input::InputPlugin,
+            remote_players::RemotePlayersPlugin,
             hud::HudPlugin,
         ))
         .run();
