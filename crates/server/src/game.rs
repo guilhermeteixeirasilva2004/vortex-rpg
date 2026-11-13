@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::Utf8Bytes;
+use engine_physics::{Body, MoveIntent, EYE_HEIGHT};
 use engine_voxel::{ChunkMap, ChunkPos, WorldGenerator};
-use shared::movement::{Body, EYE_HEIGHT};
 use shared::protocol::{self, PlayerId, PlayerInput, PlayerState, ServerMessage};
 use shared::{SERVER_TICK_RATE, TICK_DT};
 use tokio::sync::{broadcast, mpsc};
@@ -108,8 +108,10 @@ impl GameWorld {
     fn simulate(&mut self) {
         self.tick += 1;
         for (id, p) in self.players.iter_mut() {
-            p.body
-                .step(&p.input, self.chunks.as_ref(), TICK_DT, self.allow_fly);
+            // O cliente só pede o voo; quem decide é o servidor.
+            let mut intent = MoveIntent::from(&p.input);
+            intent.fly &= self.allow_fly;
+            p.body.step(&intent, self.chunks.as_ref(), TICK_DT);
             if p.body.position[1] < VOID_Y {
                 tracing::info!("jogador {id} caiu no vazio, voltando ao spawn");
                 p.body = Body::at(self.spawn);
@@ -255,6 +257,21 @@ mod golden {
             }
         }
         out
+    }
+
+    #[test]
+    fn fly_requires_server_permission() {
+        let mut w = world(false);
+        w.handle(GameEvent::Join { id: 1 });
+        let input = PlayerInput {
+            seq: 1,
+            fly: true,
+            up: 1.0,
+            ..Default::default()
+        };
+        w.handle(GameEvent::Input { id: 1, input });
+        w.simulate();
+        assert!(!w.players[&1].body.flying);
     }
 
     #[test]

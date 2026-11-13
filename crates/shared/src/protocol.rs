@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use engine_physics::MoveIntent;
 use engine_voxel::{Chunk, ChunkError, ChunkPos};
 
 pub type PlayerId = u64;
@@ -53,6 +54,21 @@ impl PlayerInput {
             0.0
         };
         self
+    }
+}
+
+impl From<&PlayerInput> for MoveIntent {
+    /// No fio, `up` é um eixo só; no domínio vira pulo (andando) e
+    /// subir/descer (voando). `fly` aqui é só o pedido do cliente.
+    fn from(input: &PlayerInput) -> Self {
+        MoveIntent {
+            forward: input.forward,
+            right: input.right,
+            yaw: input.yaw,
+            jump: input.up > 0.5,
+            fly: input.fly,
+            fly_vertical: input.up,
+        }
     }
 }
 

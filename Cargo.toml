@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/engine/voxel",
+    "crates/engine/physics",
     "crates/shared",
     "crates/client",
     "crates/server",
@@ -15,6 +16,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 shared = { path = "crates/shared" }
 engine-voxel = { path = "crates/engine/voxel" }
+engine-physics = { path = "crates/engine/physics" }
 
 thiserror = "2"
 

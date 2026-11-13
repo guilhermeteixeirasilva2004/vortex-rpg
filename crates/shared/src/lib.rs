@@ -1,7 +1,6 @@
-//! Tipos compartilhados entre cliente e servidor: voxels, protocolo de rede e
-//! a simulação de movimento (rodada pelo servidor, que é a autoridade).
+//! Tipos compartilhados entre cliente e servidor: protocolo de rede e
+//! constantes de conexão/tick.
 
-pub mod movement;
 pub mod protocol;
 
 /// Endereço padrão do servidor (pode ser sobrescrito com `VORTEX_SERVER`).

@@ -1,0 +1,9 @@
+[package]
+name = "engine-physics"
+description = "Corpo do jogador: gravidade, pulo, colisão AABB contra voxels e voo livre."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-voxel.workspace = true
