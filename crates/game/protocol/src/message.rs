@@ -1,24 +1,18 @@
-//! Mensagens trocadas via WebSocket.
-//!
-//! Por enquanto em JSON (fácil de depurar). Trocar por um formato binário
-//! (bincode/postcard) quando o volume de chunks começar a pesar.
-
 use serde::{Deserialize, Serialize};
 
-use crate::voxel::Chunk;
-
-pub type PlayerId = u64;
+use game_sim::PlayerId;
 
 /// Estado de input "segurado" no momento. O cliente não manda posição:
 /// o servidor aplica o input e decide onde o jogador está.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct PlayerInput {
+    /// Número de sequência, crescente.
     pub seq: u32,
     /// -1..1 (S..W)
     pub forward: f32,
     /// -1..1 (A..D)
     pub right: f32,
-    /// -1..1 (Shift..Space). Andando, `up > 0` é pulo; voando, sobe/desce.
+    /// -1..1 (Shift..Space). Andando, `up > 0.5` é pulo; voando, sobe/desce.
     pub up: f32,
     /// Pedido de voo livre (debug, F3). O servidor decide se permite.
     #[serde(default)]
@@ -29,37 +23,23 @@ pub struct PlayerInput {
     pub pitch: f32,
 }
 
-impl PlayerInput {
-    /// O servidor nunca confia no cliente: limita eixos e ângulos.
-    pub fn sanitized(mut self) -> Self {
-        let axis = |v: f32| if v.is_finite() { v.clamp(-1.0, 1.0) } else { 0.0 };
-        self.forward = axis(self.forward);
-        self.right = axis(self.right);
-        self.up = axis(self.up);
-        self.yaw = if self.yaw.is_finite() {
-            self.yaw.rem_euclid(std::f32::consts::TAU)
-        } else {
-            0.0
-        };
-        self.pitch = if self.pitch.is_finite() {
-            self.pitch.clamp(-1.55, 1.55)
-        } else {
-            0.0
-        };
-        self
-    }
-}
-
+/// Mensagens do cliente para o servidor.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
+    /// Input atual do jogador.
     Input(PlayerInput),
 }
 
+/// Estado de um jogador como o cliente recebe.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct PlayerState {
+    /// Jogador.
     pub id: PlayerId,
+    /// Posição do olho.
     pub position: [f32; 3],
+    /// Radianos, em torno de Y.
     pub yaw: f32,
+    /// Radianos, olhar pra cima/baixo.
     pub pitch: f32,
     /// Voo livre (debug) ativo para este jogador.
     #[serde(default)]
@@ -68,23 +48,43 @@ pub struct PlayerState {
     pub last_input_seq: u32,
 }
 
+/// Posição de chunk no fio.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct ChunkPosDto {
+    /// Eixo X, em chunks.
+    pub x: i32,
+    /// Eixo Y, em chunks.
+    pub y: i32,
+    /// Eixo Z, em chunks.
+    pub z: i32,
+}
+
+/// Chunk no fio: posição + bytes crus (índice = x + z*16 + y*256).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkDto {
+    /// Posição do chunk.
+    pub pos: ChunkPosDto,
+    /// Um byte por bloco; validado na conversão para `Chunk`.
+    pub blocks: Vec<u8>,
+}
+
+/// Mensagens do servidor para o cliente.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
+    /// Primeira mensagem da conexão.
     Welcome {
+        /// Id atribuído ao cliente.
         player_id: PlayerId,
+        /// Onde o jogador nasce.
         spawn: [f32; 3],
     },
-    ChunkData(Chunk),
+    /// Um chunk do mundo.
+    ChunkData(ChunkDto),
+    /// Estado dos jogadores após um tick.
     Snapshot {
+        /// Número do tick.
         tick: u64,
+        /// Jogadores.
         players: Vec<PlayerState>,
     },
-}
-
-pub fn encode<T: Serialize>(msg: &T) -> Result<String, serde_json::Error> {
-    serde_json::to_string(msg)
-}
-
-pub fn decode<'a, T: Deserialize<'a>>(text: &'a str) -> Result<T, serde_json::Error> {
-    serde_json::from_str(text)
 }

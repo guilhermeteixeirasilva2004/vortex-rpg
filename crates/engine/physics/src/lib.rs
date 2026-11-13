@@ -1,23 +1,27 @@
-//! Simulação de movimento. Fica no crate compartilhado para que, no futuro,
-//! o cliente possa rodar a mesma função para predição local.
+//! Física do jogador. Pura e determinística: o servidor roda para decidir a
+//! posição e, no futuro, o cliente pode rodar a mesma coisa para predição.
 //!
 //! Convenção igual à do Bevy: câmera olha para -Z, yaw gira em torno de +Y.
 //! `position` é sempre a posição do olho; o corpo é uma AABB de
 //! `PLAYER_WIDTH` x `PLAYER_HEIGHT` cujo pé fica em `position.y - EYE_HEIGHT`.
 
-use crate::protocol::PlayerInput;
+use engine_voxel::VoxelQuery;
 
 /// Velocidade horizontal andando (blocos/s).
 pub const MOVE_SPEED: f32 = 5.0;
 /// Velocidade no modo voo (debug).
 pub const FLY_SPEED: f32 = 8.0;
+/// Altura do olho acima do pé.
 pub const EYE_HEIGHT: f32 = 1.7;
+/// Largura (X e Z) da AABB do jogador.
 pub const PLAYER_WIDTH: f32 = 0.6;
+/// Altura da AABB do jogador.
 pub const PLAYER_HEIGHT: f32 = 1.8;
 /// Aceleração da gravidade (blocos/s²).
 pub const GRAVITY: f32 = 28.0;
 /// Velocidade vertical do pulo: sqrt(2 * g * h) para h ≈ 1.25 bloco.
 pub const JUMP_VELOCITY: f32 = 8.4;
+/// Velocidade máxima de queda (blocos/s).
 pub const TERMINAL_VELOCITY: f32 = 50.0;
 
 /// Maior deslocamento por eixo numa sub-etapa. Menor que 1 bloco para não
@@ -30,9 +34,22 @@ const SKIN: f32 = 1e-3;
 /// tick dentro de terreno (ex.: saiu do voo atravessando o chão).
 const MAX_UNSTUCK: i32 = 32;
 
-/// O que a física precisa saber do mundo.
-pub trait VoxelQuery {
-    fn is_solid(&self, x: i32, y: i32, z: i32) -> bool;
+/// O que o jogador quer fazer neste tick, já decidido pela aplicação
+/// (inclusive se o voo é permitido). Não é um tipo de rede.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MoveIntent {
+    /// -1..1, trás..frente.
+    pub forward: f32,
+    /// -1..1, esquerda..direita.
+    pub right: f32,
+    /// Radianos, rotação em torno de Y (direção de "frente").
+    pub yaw: f32,
+    /// Pular, se estiver no chão (só andando).
+    pub jump: bool,
+    /// Voo livre: sem gravidade nem colisão.
+    pub fly: bool,
+    /// -1..1, desce..sobe (só voando).
+    pub fly_vertical: f32,
 }
 
 /// Estado físico de um jogador. É isto que o servidor guarda e avança a cada tick.
@@ -40,13 +57,16 @@ pub trait VoxelQuery {
 pub struct Body {
     /// Posição do olho.
     pub position: [f32; 3],
+    /// Velocidade atual (blocos/s).
     pub velocity: [f32; 3],
+    /// Se terminou o último tick apoiado no chão.
     pub on_ground: bool,
     /// Modo debug: voo livre, sem gravidade nem colisão.
     pub flying: bool,
 }
 
 impl Body {
+    /// Corpo parado, com o olho em `position`.
     pub fn at(position: [f32; 3]) -> Self {
         Self {
             position,
@@ -54,25 +74,25 @@ impl Body {
         }
     }
 
-    /// Avança um tick. `allow_fly` é decisão do servidor: o cliente só pede.
-    pub fn step(&mut self, input: &PlayerInput, world: &impl VoxelQuery, dt: f32, allow_fly: bool) {
-        let flying = input.fly && allow_fly;
+    /// Avança um tick de `dt` segundos.
+    pub fn step(&mut self, intent: &MoveIntent, world: &impl VoxelQuery, dt: f32) {
+        let flying = intent.fly;
         if flying != self.flying {
             self.flying = flying;
             self.velocity = [0.0; 3];
             self.on_ground = false;
         }
         if self.flying {
-            self.step_fly(input, dt);
+            self.step_fly(intent, dt);
         } else {
-            self.step_walk(input, world, dt);
+            self.step_walk(intent, world, dt);
         }
     }
 
-    /// Movimento livre antigo: atravessa tudo, Espaço/Shift sobem/descem.
-    fn step_fly(&mut self, input: &PlayerInput, dt: f32) {
-        let [x, z] = horizontal_dir(input);
-        let mut dir = [x, input.up, z];
+    /// Movimento livre: atravessa tudo.
+    fn step_fly(&mut self, intent: &MoveIntent, dt: f32) {
+        let [x, z] = horizontal_dir(intent);
+        let mut dir = [x, intent.fly_vertical, z];
         let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
         if len > 1.0 {
             dir.iter_mut().for_each(|c| *c /= len);
@@ -82,15 +102,15 @@ impl Body {
         }
     }
 
-    fn step_walk(&mut self, input: &PlayerInput, world: &impl VoxelQuery, dt: f32) {
+    fn step_walk(&mut self, intent: &MoveIntent, world: &impl VoxelQuery, dt: f32) {
         self.unstuck(world);
 
         // Controle horizontal direto (sem inércia): responde na hora, inclusive no ar.
-        let [x, z] = horizontal_dir(input);
+        let [x, z] = horizontal_dir(intent);
         self.velocity[0] = x * MOVE_SPEED;
         self.velocity[2] = z * MOVE_SPEED;
 
-        if self.on_ground && input.up > 0.5 {
+        if self.on_ground && intent.jump {
             self.velocity[1] = JUMP_VELOCITY;
         }
         self.velocity[1] = (self.velocity[1] - GRAVITY * dt).max(-TERMINAL_VELOCITY);
@@ -194,14 +214,14 @@ fn block_range(min: [f32; 3], max: [f32; 3], axis: usize) -> std::ops::Range<i32
     min[axis].floor() as i32..max[axis].ceil() as i32
 }
 
-/// Direção horizontal (x, z) do input, normalizada se passar de 1.
-fn horizontal_dir(input: &PlayerInput) -> [f32; 2] {
-    let (sin, cos) = input.yaw.sin_cos();
+/// Direção horizontal (x, z) da intenção, normalizada se passar de 1.
+fn horizontal_dir(intent: &MoveIntent) -> [f32; 2] {
+    let (sin, cos) = intent.yaw.sin_cos();
     let forward = [-sin, -cos];
     let right = [cos, -sin];
     let mut dir = [
-        forward[0] * input.forward + right[0] * input.right,
-        forward[1] * input.forward + right[1] * input.right,
+        forward[0] * intent.forward + right[0] * intent.right,
+        forward[1] * intent.forward + right[1] * intent.right,
     ];
     let len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
     if len > 1.0 {
@@ -213,7 +233,9 @@ fn horizontal_dir(input: &PlayerInput) -> [f32; 2] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::TICK_DT;
+
+    /// Tick de 20 Hz, como no servidor.
+    const TICK_DT: f32 = 1.0 / 20.0;
 
     /// Chão plano: tudo com y < 10 é sólido, mais um muro em x >= 5.
     struct Flat;
@@ -223,9 +245,9 @@ mod tests {
         }
     }
 
-    fn run(body: &mut Body, input: PlayerInput, ticks: u32) {
+    fn run(body: &mut Body, intent: MoveIntent, ticks: u32) {
         for _ in 0..ticks {
-            body.step(&input, &Flat, TICK_DT, true);
+            body.step(&intent, &Flat, TICK_DT);
         }
     }
 
@@ -236,7 +258,7 @@ mod tests {
     #[test]
     fn falls_and_lands_on_ground() {
         let mut b = Body::at([0.5, 30.0, 0.5]);
-        run(&mut b, PlayerInput::default(), 60);
+        run(&mut b, MoveIntent::default(), 60);
         assert!(b.on_ground);
         assert!((feet(&b) - 10.0).abs() < 0.01, "pé em {}", feet(&b));
         assert_eq!(b.velocity[1], 0.0);
@@ -246,39 +268,50 @@ mod tests {
     fn fast_fall_does_not_tunnel() {
         let mut b = Body::at([0.5, 12.0 + EYE_HEIGHT, 0.5]);
         b.velocity[1] = -TERMINAL_VELOCITY;
-        run(&mut b, PlayerInput::default(), 1);
+        run(&mut b, MoveIntent::default(), 1);
         assert!(feet(&b) >= 10.0 - 0.01, "atravessou: pé em {}", feet(&b));
     }
 
     #[test]
     fn jump_only_from_ground() {
         let mut b = Body::at([0.5, 10.0 + SKIN + EYE_HEIGHT, 0.5]);
-        run(&mut b, PlayerInput::default(), 2);
+        run(&mut b, MoveIntent::default(), 2);
         assert!(b.on_ground);
 
-        let jump = PlayerInput { up: 1.0, ..Default::default() };
+        let jump = MoveIntent {
+            jump: true,
+            ..Default::default()
+        };
         let mut peak = 0.0_f32;
         for _ in 0..20 {
-            b.step(&jump, &Flat, TICK_DT, true);
+            b.step(&jump, &Flat, TICK_DT);
             peak = peak.max(feet(&b));
             if b.on_ground {
                 break;
             }
         }
-        assert!(peak > 11.0 && peak < 11.6, "altura do pulo: {}", peak - 10.0);
+        assert!(
+            peak > 11.0 && peak < 11.6,
+            "altura do pulo: {}",
+            peak - 10.0
+        );
     }
 
     #[test]
     fn wall_blocks_horizontal_movement() {
         let mut b = Body::at([0.5, 10.0 + SKIN + EYE_HEIGHT, 0.5]);
         // yaw = -90°: "frente" vira +X.
-        let walk = PlayerInput {
+        let walk = MoveIntent {
             forward: 1.0,
             yaw: -std::f32::consts::FRAC_PI_2,
             ..Default::default()
         };
         run(&mut b, walk, 40);
-        assert!(b.position[0] + PLAYER_WIDTH / 2.0 <= 5.0, "x = {}", b.position[0]);
+        assert!(
+            b.position[0] + PLAYER_WIDTH / 2.0 <= 5.0,
+            "x = {}",
+            b.position[0]
+        );
         assert!(b.position[0] > 4.5);
         assert!(b.on_ground);
     }
@@ -286,25 +319,19 @@ mod tests {
     #[test]
     fn fly_ignores_gravity_and_collision() {
         let mut b = Body::at([0.5, 5.0, 0.5]); // dentro do chão
-        let fly = PlayerInput { fly: true, ..Default::default() };
+        let fly = MoveIntent {
+            fly: true,
+            ..Default::default()
+        };
         run(&mut b, fly, 20);
         assert_eq!(b.position, [0.5, 5.0, 0.5]);
         assert!(b.flying);
     }
 
     #[test]
-    fn fly_requires_server_permission() {
-        let mut b = Body::at([0.5, 30.0, 0.5]);
-        let fly = PlayerInput { fly: true, ..Default::default() };
-        b.step(&fly, &Flat, TICK_DT, false);
-        assert!(!b.flying);
-        assert!(b.position[1] < 30.0);
-    }
-
-    #[test]
     fn leaving_fly_inside_terrain_pops_out() {
         let mut b = Body::at([0.5, 5.0, 0.5]);
-        run(&mut b, PlayerInput::default(), 5);
+        run(&mut b, MoveIntent::default(), 5);
         assert!(feet(&b) >= 10.0 - 0.01, "pé em {}", feet(&b));
     }
 }

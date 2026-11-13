@@ -1,0 +1,17 @@
+[package]
+name = "game-protocol"
+description = "Mensagens cliente/servidor (DTOs), conversões para o domínio e codec JSON."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-voxel.workspace = true
+engine-physics.workspace = true
+game-sim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

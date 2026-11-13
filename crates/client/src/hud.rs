@@ -55,7 +55,6 @@ fn update_fps(
         .find(|p| Some(p.id) == local.id)
         .is_some_and(|p| p.flying);
     let mode = if flying { "VOO (debug)" } else { "andando" };
-    text.0 = format!(
-        "FPS: {fps:.0}  |  modo: {mode}  F3: voo  |  clique: capturar mouse  Esc: soltar"
-    );
+    text.0 =
+        format!("FPS: {fps:.0}  |  modo: {mode}  F3: voo  |  clique: capturar mouse  Esc: soltar");
 }

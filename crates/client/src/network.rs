@@ -3,17 +3,20 @@
 
 use bevy::prelude::*;
 use crossbeam_channel::{Receiver, Sender};
+use engine_voxel::Chunk;
 use futures_util::{SinkExt, StreamExt};
-use shared::protocol::{self, ClientMessage, PlayerId, PlayerState, ServerMessage};
-use shared::voxel::Chunk;
+use game_protocol::{ClientMessage, PlayerId, PlayerState, ServerMessage};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
+
+/// Servidor padrão (sobrescrito com `VORTEX_SERVER`).
+const DEFAULT_SERVER_URL: &str = "ws://127.0.0.1:3000/ws";
 
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        let url = std::env::var("VORTEX_SERVER").unwrap_or_else(|_| shared::DEFAULT_SERVER_URL.into());
+        let url = std::env::var("VORTEX_SERVER").unwrap_or_else(|_| DEFAULT_SERVER_URL.into());
         app.insert_resource(spawn_network_thread(url))
             .init_resource::<LocalPlayer>()
             .init_resource::<IncomingChunks>()
@@ -40,15 +43,18 @@ pub struct LocalPlayer {
     pub id: Option<PlayerId>,
 }
 
+/// Chunks recebidos e ainda não processados pelo mundo.
 #[derive(Resource, Default)]
 pub struct IncomingChunks(pub Vec<Chunk>);
 
+/// Snapshot mais recente do servidor. Só é escrito quando chega um novo,
+/// então consumidores usam `is_changed()` para saber se há novidade.
 #[derive(Resource, Default)]
 pub struct LatestSnapshot {
+    /// Tick do snapshot.
     pub tick: u64,
+    /// Estado dos jogadores.
     pub players: Vec<PlayerState>,
-    /// Marcado quando chega snapshot novo; consumidores limpam.
-    pub fresh: bool,
 }
 
 fn receive_messages(
@@ -63,18 +69,14 @@ fn receive_messages(
                 info!("conectado como jogador {player_id}, spawn em {spawn:?}");
                 local.id = Some(player_id);
             }
-            ServerMessage::ChunkData(chunk) => {
-                if chunk.is_valid() {
-                    chunks.0.push(chunk);
-                } else {
-                    warn!("chunk inválido recebido em {:?}", chunk.pos);
-                }
-            }
+            ServerMessage::ChunkData(dto) => match Chunk::try_from(dto) {
+                Ok(chunk) => chunks.0.push(chunk),
+                Err(e) => warn!("chunk inválido recebido: {e}"),
+            },
             ServerMessage::Snapshot { tick, players } => {
                 if tick >= snapshot.tick {
                     snapshot.tick = tick;
                     snapshot.players = players;
-                    snapshot.fresh = true;
                 }
             }
         }
@@ -120,7 +122,7 @@ async fn run_connection(
         tokio::select! {
             msg = read.next() => match msg {
                 Some(Ok(Message::Text(text))) => {
-                    match protocol::decode::<ServerMessage>(text.as_str()) {
+                    match game_protocol::decode::<ServerMessage>(text.as_str()) {
                         Ok(m) => if incoming.send(m).is_err() { break },
                         Err(e) => warn!("mensagem inválida do servidor: {e}"),
                     }
@@ -130,7 +132,7 @@ async fn run_connection(
                 Some(Err(e)) => return Err(e.into()),
             },
             out = outgoing.recv() => match out {
-                Some(m) => write.send(Message::text(protocol::encode(&m)?)).await?,
+                Some(m) => write.send(Message::text(game_protocol::encode(&m)?)).await?,
                 None => break,
             },
         }

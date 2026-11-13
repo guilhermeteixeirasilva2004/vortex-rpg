@@ -1,0 +1,12 @@
+[package]
+name = "engine-meshing"
+description = "Geometria de chunks (posições, normais, cores, índices) sem depender de renderizador."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-voxel.workspace = true
+
+[lints]
+workspace = true

@@ -3,15 +3,19 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
-use shared::voxel::{Block, Chunk, ChunkPos, CHUNK_SIZE_I32};
+use bevy::render::mesh::{Indices, Mesh};
+use bevy::render::render_asset::RenderAssetUsages;
+use bevy::render::render_resource::PrimitiveTopology;
+use engine_meshing::{build_chunk_geometry, ChunkGeometry};
+use engine_voxel::{ChunkMap, ChunkPos};
 
-use crate::meshing::build_chunk_mesh;
 use crate::network::IncomingChunks;
 
 /// Máximo de chunks remeshados por frame, para não travar o frame quando
 /// chegam muitos de uma vez.
 const MESH_BUDGET_PER_FRAME: usize = 8;
 
+/// Chunks recebidos, malhas e iluminação da cena.
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
@@ -23,27 +27,10 @@ impl Plugin for WorldPlugin {
 }
 
 #[derive(Resource, Default)]
-pub struct ClientWorld {
-    chunks: HashMap<ChunkPos, Chunk>,
+struct ClientWorld {
+    chunks: ChunkMap,
     entities: HashMap<ChunkPos, Entity>,
     dirty: HashSet<ChunkPos>,
-}
-
-impl ClientWorld {
-    /// Bloco em coordenadas de mundo. Chunks não carregados contam como ar.
-    pub fn block(&self, x: i32, y: i32, z: i32) -> Block {
-        let pos = ChunkPos::from_world_block(x, y, z);
-        self.chunks
-            .get(&pos)
-            .and_then(|c| {
-                c.get(
-                    x.rem_euclid(CHUNK_SIZE_I32),
-                    y.rem_euclid(CHUNK_SIZE_I32),
-                    z.rem_euclid(CHUNK_SIZE_I32),
-                )
-            })
-            .unwrap_or_default()
-    }
 }
 
 #[derive(Resource)]
@@ -81,12 +68,12 @@ fn ingest_chunks(mut incoming: ResMut<IncomingChunks>, mut world: ResMut<ClientW
         return;
     }
     for chunk in incoming.0.drain(..) {
-        let pos = chunk.pos;
-        world.chunks.insert(pos, chunk);
+        let pos = chunk.pos();
+        world.chunks.insert(chunk);
         world.dirty.insert(pos);
         // Vizinhos já carregados podem ter faces que agora ficaram ocultas.
         for n in pos.neighbors() {
-            if world.chunks.contains_key(&n) {
+            if world.chunks.contains(n) {
                 world.dirty.insert(n);
             }
         }
@@ -102,20 +89,26 @@ fn remesh_dirty_chunks(
     if world.dirty.is_empty() {
         return;
     }
-    let batch: Vec<ChunkPos> = world.dirty.iter().copied().take(MESH_BUDGET_PER_FRAME).collect();
+    let batch: Vec<ChunkPos> = world
+        .dirty
+        .iter()
+        .copied()
+        .take(MESH_BUDGET_PER_FRAME)
+        .collect();
 
     for pos in batch {
         world.dirty.remove(&pos);
-        let Some(chunk) = world.chunks.get(&pos) else {
+        let Some(chunk) = world.chunks.get(pos) else {
             continue;
         };
         let [ox, oy, oz] = pos.world_origin();
-        let mesh = build_chunk_mesh(chunk, |x, y, z| world.block(ox + x, oy + y, oz + z));
+        let mesh =
+            build_chunk_geometry(chunk, |x, y, z| world.chunks.block(ox + x, oy + y, oz + z));
 
         if let Some(old) = world.entities.remove(&pos) {
             commands.entity(old).despawn();
         }
-        if let Some(mesh) = mesh {
+        if let Some(mesh) = mesh.map(to_mesh) {
             let entity = commands
                 .spawn((
                     Mesh3d(meshes.add(mesh)),
@@ -126,4 +119,18 @@ fn remesh_dirty_chunks(
             world.entities.insert(pos, entity);
         }
     }
+}
+
+/// Converte a geometria pura do chunk para o formato do Bevy.
+fn to_mesh(g: ChunkGeometry) -> Mesh {
+    // RENDER_WORLD: a cópia na CPU é descartada após o upload (economiza RAM).
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, g.positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, g.normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, g.colors);
+    mesh.insert_indices(Indices::U32(g.indices));
+    mesh
 }
