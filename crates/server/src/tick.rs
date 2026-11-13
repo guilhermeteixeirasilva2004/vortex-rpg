@@ -1,3 +1,6 @@
+//! Adaptador de tempo: loop de tick em taxa fixa (tokio) e broadcast dos
+//! snapshots já codificados para as conexões.
+
 use std::time::Duration;
 
 use axum::extract::ws::Utf8Bytes;

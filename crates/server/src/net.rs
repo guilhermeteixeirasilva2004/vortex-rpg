@@ -1,3 +1,7 @@
+//! Adaptador de transporte: WebSocket (axum). Cada conexão recebe o mundo,
+//! repassa o input como `Command` para o loop de tick e encaminha os
+//! snapshots transmitidos por ele.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -12,9 +16,10 @@ use game_protocol::{ChunkDto, ClientMessage, ServerMessage};
 use game_sim::Command;
 use tokio::sync::{broadcast, mpsc};
 
+/// Estado compartilhado entre as conexões.
 #[derive(Clone)]
 pub struct AppState {
-    events: mpsc::UnboundedSender<Command>,
+    commands: mpsc::UnboundedSender<Command>,
     snapshots: broadcast::Sender<Utf8Bytes>,
     chunks: Arc<ChunkMap>,
     spawn: [f32; 3],
@@ -22,14 +27,15 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Liga o transporte aos canais do loop de tick e ao mundo.
     pub fn new(
-        events: mpsc::UnboundedSender<Command>,
+        commands: mpsc::UnboundedSender<Command>,
         snapshots: broadcast::Sender<Utf8Bytes>,
         chunks: Arc<ChunkMap>,
         spawn: [f32; 3],
     ) -> Self {
         Self {
-            events,
+            commands,
             snapshots,
             chunks,
             spawn,
@@ -38,6 +44,7 @@ impl AppState {
     }
 }
 
+/// Rotas HTTP: `/ws` (jogo) e `/health`.
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/ws", get(ws_handler))
@@ -86,7 +93,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     }
 
     let mut snapshots = state.snapshots.subscribe();
-    if state.events.send(Command::Join { id }).is_err() {
+    if state.commands.send(Command::Join { id }).is_err() {
         return;
     }
 
@@ -107,14 +114,14 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         }
     });
 
-    let events = state.events.clone();
+    let commands = state.commands.clone();
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = rx.next().await {
             match msg {
                 Message::Text(text) => {
                     match game_protocol::decode::<ClientMessage>(text.as_str()) {
                         Ok(ClientMessage::Input(input)) => {
-                            if events
+                            if commands
                                 .send(Command::Input {
                                     id,
                                     input: input.into(),
@@ -138,5 +145,5 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         _ = &mut recv_task => send_task.abort(),
     }
 
-    let _ = state.events.send(Command::Leave { id });
+    let _ = state.commands.send(Command::Leave { id });
 }
